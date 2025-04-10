@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    @apply bg-black text-white;
+    background-color: black;
+    color: #ffffff;
+  }
+}
+/* Custom animation for price changes */
+@keyframes flash {
+  0%, 100% { background-color: transparent; }
+  50% { background-color: rgba(59, 130, 246, 0.15); }
+}
+
+.animate-flash {
+  animation: flash 1s ease-in-out;
+}
+
+/* Custom styles for slider inputs */
+@layer components {
+  input[type="range"] {
+    @apply h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer;
+  }
+  
+  input[type="range"]::-webkit-slider-thumb {
+    @apply appearance-none w-4 h-4 bg-blue-600 rounded-full cursor-pointer;
+  }
+  
+  input[type="range"]::-moz-range-thumb {
+    @apply w-4 h-4 bg-blue-600 border-0 rounded-full cursor-pointer;
+  }
+}
+
+/* Ensure price changes are animated with transitions */
+.animate-price-up, .animate-price-down {
+  @apply transition-all duration-1000 rounded-md px-2 py-1;
+}
+
+/* Make sure elements appear with a smooth fade */
+.fade-in {
+  @apply transition-opacity duration-300 ease-in-out;
+}
+
+/* Enhanced accessibility for focus states */
+:focus {
+  @apply outline-blue-500 outline-offset-2;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .container {
+    @apply px-4;
+  }
+}
