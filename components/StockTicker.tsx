@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from 'react';
-import { StockInfo } from '@/lib/types';
+import { StockInfo, formatPrice } from '@/lib/types';
 import { useTickerContext } from '@/lib/context';
 
 // Utility function to format price changes
@@ -17,6 +17,15 @@ const getPriceChangeClasses = (percentageChange: number): string => {
     return 'text-red-400 group-hover:text-red-300';
   }
   return 'text-gray-400 group-hover:text-gray-300';
+};
+
+// Get price color based on comparison with initial price
+const getPriceColorBasedOnInitial = (currentPrice: number, initialPrice: number): string => {
+  if (currentPrice >= initialPrice) {
+    return 'text-green-400'; // Green if equal or higher than initial price
+  } else {
+    return 'text-red-400'; // Red if lower than initial price
+  }
 };
 
 // Calculate time since the last update
@@ -39,6 +48,7 @@ type StockTickerItemProps = {
 
 // Component for individual stock item in the list
 const StockTickerItem: React.FC<StockTickerItemProps> = ({ stock, isSelected, onSelect }) => {
+  const { tickerState } = useTickerContext();
   const { symbol, name, currentPrice, percentageChange, lastUpdated } = stock;
   const priceRef = useRef<HTMLSpanElement>(null);
   const [prevPrice, setPrevPrice] = useState<number>(currentPrice);
@@ -87,8 +97,8 @@ const StockTickerItem: React.FC<StockTickerItemProps> = ({ stock, isSelected, on
         </div>
         
         <div className="text-right">
-          <span className="font-semibold text-white block" ref={priceRef}>
-            ${currentPrice.toFixed(2)}
+          <span className={`font-semibold block ${getPriceColorBasedOnInitial(stock.currentPrice, stock.initialPrice)}`} ref={priceRef}>
+            {formatPrice(currentPrice, tickerState.selectedCurrency)}
           </span>
           
           <div className={`flex items-center text-sm ${getPriceChangeClasses(percentageChange)}`}>

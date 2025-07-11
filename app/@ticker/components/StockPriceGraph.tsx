@@ -14,7 +14,7 @@ import {
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
 import { useTickerContext } from '@/lib/context';
-import { PricePoint } from '@/lib/types';
+import { PricePoint, formatPrice } from '@/lib/types';
 
 // Register ChartJS components
 ChartJS.register(
@@ -48,6 +48,14 @@ export default function StockPriceGraph() {
     if (!selectedStock) return null;
     
     const priceHistory = getStockPriceHistory(selectedStock);
+    const currentStock = stocks.find(s => s.symbol === selectedStock);
+    
+    if (!currentStock) return null;
+    
+    // Determine color based on current price vs initial price
+    const isAboveInitial = currentStock.currentPrice >= currentStock.initialPrice;
+    const borderColor = isAboveInitial ? 'rgb(74, 222, 128)' : 'rgb(248, 113, 113)'; // green-400 : red-400
+    const backgroundColor = isAboveInitial ? 'rgba(74, 222, 128, 0.1)' : 'rgba(248, 113, 113, 0.1)';
     
     return {
       labels: priceHistory.map(point => formatTimeLabel(point.timestamp)),
@@ -55,8 +63,8 @@ export default function StockPriceGraph() {
         {
           label: `${selectedStock} Price`,
           data: priceHistory.map(point => point.price),
-          borderColor: 'rgb(59, 130, 246)', // Tailwind blue-500
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
+          borderColor: borderColor,
+          backgroundColor: backgroundColor,
           borderWidth: 2,
           tension: 0.2, // Slightly curved lines
           pointRadius: 3,
@@ -162,14 +170,22 @@ export default function StockPriceGraph() {
       </div>
       
       <div className="bg-gray-900 rounded-md p-2 border border-gray-700">
-        {selectedStock && (
-          <div className="text-sm text-gray-300 flex justify-between items-center mb-2 px-2">
-            <span>Current: ${stocks.find(s => s.symbol === selectedStock)?.currentPrice.toFixed(2)}</span>
-            <span>
-              Updated: {formatTimeLabel(stocks.find(s => s.symbol === selectedStock)?.lastUpdated || new Date())}
-            </span>
-          </div>
-        )}
+        {selectedStock && (() => {
+          const currentStock = stocks.find(s => s.symbol === selectedStock);
+          if (!currentStock) return null;
+          
+          const isAboveInitial = currentStock.currentPrice >= currentStock.initialPrice;
+          const priceColor = isAboveInitial ? 'text-green-400' : 'text-red-400';
+          
+          return (
+            <div className="text-sm text-gray-300 flex justify-between items-center mb-2 px-2">
+              <span>Current: <span className={priceColor}>{formatPrice(currentStock.currentPrice, tickerState.selectedCurrency)}</span></span>
+              <span>
+                Updated: {formatTimeLabel(currentStock.lastUpdated)}
+              </span>
+            </div>
+          );
+        })()}
         
         <div className="h-72 w-full">
           {chartData ? (

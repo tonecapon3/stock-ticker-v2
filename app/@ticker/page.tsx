@@ -11,7 +11,7 @@ export default function TickerPage() {
   return (
     <div className="space-y-8">
       <header className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
-        <h2 className="text-2xl font-bold text-white">Live Stock Prices</h2>
+        <h2 className="text-2xl font-bold text-white">Stock Prices</h2>
         <div className="text-sm">
           <span className={`inline-block px-3 py-1 rounded-full font-medium ${isPaused 
             ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' 

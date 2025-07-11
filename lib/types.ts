@@ -96,10 +96,52 @@ export interface StockInfo {
   // Prices must be between MIN_STOCK_PRICE and MAX_STOCK_PRICE
   currentPrice: number;
   previousPrice: number;
+  initialPrice: number; // The original price when stock was first added
   percentageChange: number;
   lastUpdated: Date;
   priceHistory: PricePoint[];
 }
+
+/**
+ * Supported currencies
+ */
+export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'INR' | 'CHF';
+
+/**
+ * Currency display information
+ */
+export interface CurrencyInfo {
+  code: Currency;
+  symbol: string;
+  name: string;
+}
+
+/**
+ * Available currencies with their display information
+ */
+export const CURRENCIES: Record<Currency, CurrencyInfo> = {
+  USD: { code: 'USD', symbol: '$', name: 'US Dollar' },
+  EUR: { code: 'EUR', symbol: '€', name: 'Euro' },
+  GBP: { code: 'GBP', symbol: '£', name: 'British Pound' },
+  JPY: { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+  CAD: { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+  INR: { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+  CHF: { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' }
+};
+
+/**
+ * Simple currency conversion rates (in a real app, these would come from an API)
+ * All rates are relative to USD
+ */
+export const CURRENCY_RATES: Record<Currency, number> = {
+  USD: 1.0,
+  EUR: 0.85,
+  GBP: 0.73,
+  JPY: 110.0,
+  CAD: 1.25,
+  INR: 74.5,
+  CHF: 0.92
+};
 
 /**
  * Application state for the ticker
@@ -110,6 +152,8 @@ export interface TickerState {
   updateIntervalMs: number;
   isPaused: boolean;
   selectedStock?: string;
+  // Currency support
+  selectedCurrency: Currency;
   // Rate limiting state for security
   rateLimiters: {
     [key: string]: RateLimitTracker;
@@ -134,6 +178,8 @@ export interface TickerContextType {
   removeStock: (symbol: string) => ValidationResult;
   selectStock: (symbol: string) => ValidationResult;
   getStockPriceHistory: (symbol: string) => PricePoint[];
+  // Currency support
+  changeCurrency: (currency: Currency) => ValidationResult;
   // Utility for validation (moved from just implementation to the public interface)
   validateInput: {
     stockSymbol: (symbol: string) => ValidationResult;
@@ -473,6 +519,58 @@ export function loadFromSecureStorage<T>(key: string): { result: ValidationResul
       }
     };
   }
+}
+
+/**
+ * Currency conversion utilities
+ */
+export function convertCurrency(amount: number, fromCurrency: Currency, toCurrency: Currency): number {
+  if (fromCurrency === toCurrency) {
+    return amount;
+  }
+  
+  // Convert to USD first, then to target currency
+  const usdAmount = amount / CURRENCY_RATES[fromCurrency];
+  const convertedAmount = usdAmount * CURRENCY_RATES[toCurrency];
+  
+  return convertedAmount;
+}
+
+/**
+ * Format a price with currency symbol
+ */
+export function formatPrice(amount: number, currency: Currency, decimals: number = 2): string {
+  const currencyInfo = CURRENCIES[currency];
+  
+  // Special formatting for JPY (no decimals)
+  const finalDecimals = currency === 'JPY' ? 0 : decimals;
+  
+  const formattedAmount = amount.toFixed(finalDecimals);
+  
+  // Add thousands separators
+  const parts = formattedAmount.split('.');
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  const formattedWithCommas = parts.join('.');
+  
+  return `${currencyInfo.symbol}${formattedWithCommas}`;
+}
+
+/**
+ * Validate currency selection
+ */
+export function validateCurrency(currency: string): ValidationResult {
+  if (!currency || typeof currency !== 'string') {
+    return { isValid: false, errorMessage: 'Currency is required' };
+  }
+  
+  if (!(currency in CURRENCIES)) {
+    return { 
+      isValid: false, 
+      errorMessage: `Invalid currency: ${currency}. Supported currencies: ${Object.keys(CURRENCIES).join(', ')}` 
+    };
+  }
+  
+  return { isValid: true };
 }
 
 /**

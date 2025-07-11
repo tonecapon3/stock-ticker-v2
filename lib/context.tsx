@@ -20,6 +20,10 @@ import {
   checkRateLimit,
   getMemoryUsage,
   MemoryStats,
+  Currency,
+  validateCurrency,
+  convertCurrency,
+  CURRENCY_RATES,
 } from './types';
 
 // Secure storage response type definition
@@ -165,6 +169,7 @@ const DEFAULT_STOCKS: StockInfo[] = [
     name: 'Bane&Ox',
     currentPrice: 185.75,
     previousPrice: 185.75,
+    initialPrice: 185.75,
     percentageChange: 0,
     lastUpdated: new Date(),
     priceHistory: [{ timestamp: new Date(), price: 185.75 }],
@@ -174,6 +179,7 @@ const DEFAULT_STOCKS: StockInfo[] = [
     name: 'Alphabet Inc.',
     currentPrice: 176.30,
     previousPrice: 176.30,
+    initialPrice: 176.30,
     percentageChange: 0,
     lastUpdated: new Date(),
     priceHistory: [{ timestamp: new Date(), price: 176.30 }],
@@ -183,6 +189,7 @@ const DEFAULT_STOCKS: StockInfo[] = [
     name: 'Microsoft Corporation',
     currentPrice: 415.20,
     previousPrice: 415.20,
+    initialPrice: 415.20,
     percentageChange: 0,
     lastUpdated: new Date(),
     priceHistory: [{ timestamp: new Date(), price: 415.20 }],
@@ -237,6 +244,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     updateIntervalMs: DEFAULT_UPDATE_INTERVAL,
     isPaused: false,
     selectedStock: DEFAULT_STOCKS[0]?.symbol, // Default to first stock
+    selectedCurrency: 'USD', // Default currency
     rateLimiters: {}, // Initialize empty rate limiters
     retryTrackers: {}, // Initialize empty retry trackers
     memoryStats: getMemoryUsage(), // Initial memory stats (might be undefined)
@@ -497,6 +505,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         name: sanitizedName,
         currentPrice: initialPrice,
         previousPrice: initialPrice,
+        initialPrice: initialPrice,
         percentageChange: 0,
         lastUpdated: timestamp,
         priceHistory: [{ timestamp, price: initialPrice }],
@@ -651,6 +660,69 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       return [];
     }
   }, [tickerState.stocks]);
+
+  /**
+   * Change the selected currency with validation
+   */
+  const changeCurrency = useCallback((currency: Currency): ValidationResult => {
+    try {
+      // Validate currency
+      const currencyValidation = validateCurrency(currency);
+      if (!currencyValidation.isValid) {
+        return currencyValidation;
+      }
+      
+      // Check rate limiting for currency changes
+      const rateLimiter = getRateLimiter('changeCurrency');
+      const rateLimitCheck = checkRateLimit(rateLimiter, 30, 60000); // 30 currency changes per minute max
+      if (!rateLimitCheck.isValid) {
+        return rateLimitCheck;
+      }
+      
+      // Convert all stock prices to the new currency
+      safelyUpdateState(prevState => {
+        const convertedStocks = prevState.stocks.map((stock) => {
+          // Convert current, previous, and initial prices
+          const convertedCurrentPrice = convertCurrency(stock.currentPrice, prevState.selectedCurrency, currency);
+          const convertedPreviousPrice = convertCurrency(stock.previousPrice, prevState.selectedCurrency, currency);
+          const convertedInitialPrice = convertCurrency(stock.initialPrice, prevState.selectedCurrency, currency);
+          
+          // Convert price history
+          const convertedHistory = stock.priceHistory.map(point => ({
+            ...point,
+            price: convertCurrency(point.price, prevState.selectedCurrency, currency)
+          }));
+          
+          return {
+            ...stock,
+            currentPrice: convertedCurrentPrice,
+            previousPrice: convertedPreviousPrice,
+            initialPrice: convertedInitialPrice,
+            priceHistory: convertedHistory,
+            // Recalculate percentage change in the new currency
+            percentageChange: convertedPreviousPrice > 0 
+              ? ((convertedCurrentPrice - convertedPreviousPrice) / convertedPreviousPrice) * 100
+              : 0
+          };
+        });
+        
+        return {
+          ...prevState,
+          selectedCurrency: currency,
+          stocks: convertedStocks
+        };
+      });
+      
+      return { isValid: true };
+    } catch (err) {
+      console.error('Error changing currency:', err);
+      setError(`Error changing currency: ${err instanceof Error ? err.message : String(err)}`);
+      return { 
+        isValid: false, 
+        errorMessage: `Internal error changing currency: ${err instanceof Error ? err.message : String(err)}` 
+      };
+    }
+  }, [tickerState.selectedCurrency, tickerState.stocks, getRateLimiter, safelyUpdateState]);
 
   /**
    * Memory usage monitoring effect
@@ -912,6 +984,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     removeStock,
     selectStock,
     getStockPriceHistory,
+    changeCurrency,
     validateInput, // Expose validation utilities
     saveStateToStorage,
     loadStateFromStorage,

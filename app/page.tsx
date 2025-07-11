@@ -18,15 +18,6 @@ export default function Home() {
       <p className="text-gray-700 mb-4">
         Use the controls panel on the right to interact with the ticker display.
       </p>
-      
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-4 text-blue-800">
-        <h3 className="font-medium mb-2">How It Works</h3>
-        <p className="text-sm">
-          This application uses Next.js 14 with App Router and parallel routes for the ticker and controls sections.
-          The stock data is managed through React Context and updates either randomly on a timer or based on your manual inputs.
-          Price changes are animated to provide visual feedback for market movements.
-        </p>
-      </div>
     </div>
   );
 }

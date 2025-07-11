@@ -33,7 +33,7 @@ export function TabContent({ ticker, controls }: TabContentProps) {
           aria-selected={activeTab === 'ticker'}
           role="tab"
         >
-          Live Stock Prices
+          Stock Prices
         </button>
         <button
           onClick={() => handleTabChange('controls')}
