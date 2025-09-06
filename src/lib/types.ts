@@ -34,7 +34,7 @@ export const SECURITY_CONSTRAINTS = {
   RETRY_DELAY_MS: 1000, // Delay between retry attempts
   // LocalStorage
   STORAGE_PREFIX: 'secure_ticker_',
-  STORAGE_ENCRYPTION_KEY: 'TICKER_STORAGE_KEY', // Should be environment variable in production
+  STORAGE_ENCRYPTION_KEY: import.meta.env.VITE_STORAGE_ENCRYPTION_KEY || 'TICKER_STORAGE_KEY_FALLBACK',
   // Maximum localStorage items
   MAX_STORAGE_ITEMS: 100,
 };
@@ -106,6 +106,11 @@ export interface StockInfo {
  * Supported currencies
  */
 export type Currency = 'USD' | 'EUR' | 'GBP' | 'JPY' | 'CAD' | 'INR' | 'CHF';
+
+/**
+ * Chart time range options for filtering price history
+ */
+export type ChartTimeRange = '1m' | '5m' | '15m' | '1h' | '4h' | 'all';
 
 /**
  * Currency display information

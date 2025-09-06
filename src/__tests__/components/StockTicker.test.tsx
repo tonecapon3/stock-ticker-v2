@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
-import StockTicker, { StockTickerList } from '../../components/StockTicker';
+import { StockTicker, StockTickerList } from '../../components/StockTicker';
 import { StockInfo } from '../../lib/types';
 
 // Mock date for consistent testing
@@ -12,10 +12,15 @@ jest.spyOn(global, 'Date').mockImplementation(() => mockDate as unknown as strin
 const mockStock: StockInfo = {
   symbol: 'AAPL',
   name: 'Apple Inc.',
-  currentPrice: 184.25,
-  previousPrice: 180.50,
-  percentageChange: 2.08,
-  lastUpdated: new Date(),
+  currentPrice: 150.25,
+  previousPrice: 148.50,
+  initialPrice: 148.00,
+  percentageChange: 1.18,
+  lastUpdated: new Date('2023-01-01T00:00:00Z'),
+  priceHistory: [
+    { timestamp: new Date('2023-01-01T00:00:00Z'), price: 148.00 },
+    { timestamp: new Date('2023-01-01T00:01:00Z'), price: 150.25 }
+  ]
 };
 
 const mockStockDown: StockInfo = {
@@ -23,8 +28,13 @@ const mockStockDown: StockInfo = {
   name: 'Microsoft Corporation',
   currentPrice: 408.75,
   previousPrice: 410.25,
+  initialPrice: 412.00,
   percentageChange: -0.37,
   lastUpdated: new Date(),
+  priceHistory: [
+    { timestamp: new Date('2023-01-01T00:00:00Z'), price: 412.00 },
+    { timestamp: new Date('2023-01-01T00:01:00Z'), price: 408.75 }
+  ]
 };
 
 const mockStocks = [
@@ -35,8 +45,13 @@ const mockStocks = [
     name: 'Alphabet Inc.',
     currentPrice: 149.50,
     previousPrice: 147.80,
+    initialPrice: 147.00,
     percentageChange: 1.15,
     lastUpdated: new Date(),
+    priceHistory: [
+      { timestamp: new Date('2023-01-01T00:00:00Z'), price: 147.00 },
+      { timestamp: new Date('2023-01-01T00:01:00Z'), price: 149.50 }
+    ]
   },
 ];
 

@@ -59,6 +59,12 @@ const TestTickerControls = () => {
       >
         Set AAPL Price
       </button>
+      <button 
+        data-testid="set-all-prices" 
+        onClick={() => setPrice('ALL_STOCKS', 300)}
+      >
+        Set All Prices
+      </button>
     </div>
   );
 };
@@ -238,6 +244,38 @@ describe('TickerProvider', () => {
     
     // Verify percentage change is calculated
     expect(parseFloat(screen.getByTestId('change-AAPL').textContent || '0')).not.toBe(0);
+  });
+  
+  test('bulk update sets all stock prices with ALL_STOCKS symbol', async () => {
+    render(
+      <TickerProvider>
+        <TestTickerDisplay />
+        <TestTickerControls />
+      </TickerProvider>
+    );
+    
+    // Get initial prices for all stocks
+    const initialPriceAAPL = screen.getByTestId('price-AAPL').textContent;
+    const initialPriceGOOGL = screen.getByTestId('price-GOOGL').textContent;
+    const initialPriceMSFT = screen.getByTestId('price-MSFT').textContent;
+    
+    // Set all prices to 300
+    await userEvent.click(screen.getByTestId('set-all-prices'));
+    
+    // Verify all prices changed to 300
+    expect(screen.getByTestId('price-AAPL')).toHaveTextContent('300.00');
+    expect(screen.getByTestId('price-GOOGL')).toHaveTextContent('300.00');
+    expect(screen.getByTestId('price-MSFT')).toHaveTextContent('300.00');
+    
+    // Verify they're different from initial prices
+    expect(screen.getByTestId('price-AAPL')).not.toHaveTextContent(initialPriceAAPL as string);
+    expect(screen.getByTestId('price-GOOGL')).not.toHaveTextContent(initialPriceGOOGL as string);
+    expect(screen.getByTestId('price-MSFT')).not.toHaveTextContent(initialPriceMSFT as string);
+    
+    // Verify percentage changes are calculated for all stocks
+    expect(parseFloat(screen.getByTestId('change-AAPL').textContent || '0')).not.toBe(0);
+    expect(parseFloat(screen.getByTestId('change-GOOGL').textContent || '0')).not.toBe(0);
+    expect(parseFloat(screen.getByTestId('change-MSFT').textContent || '0')).not.toBe(0);
   });
 });
 

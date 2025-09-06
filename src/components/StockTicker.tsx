@@ -48,6 +48,7 @@ type StockTickerItemProps = {
 const StockTickerItem: React.FC<StockTickerItemProps> = ({ stock, isSelected, onSelect }) => {
   const { tickerState } = useTickerContext();
   const { symbol, name, currentPrice, percentageChange, lastUpdated } = stock;
+  const { isPaused } = tickerState;
   const priceRef = useRef<HTMLSpanElement>(null);
   const [prevPrice, setPrevPrice] = useState<number>(currentPrice);
   
@@ -74,8 +75,9 @@ const StockTickerItem: React.FC<StockTickerItemProps> = ({ stock, isSelected, on
     <div 
       className={`
         group p-3 rounded-lg transition-all duration-200 ease-in-out 
-        hover:bg-gray-800 cursor-pointer border
+        hover:bg-gray-800 cursor-pointer border relative
         ${isSelected ? 'border-blue-500 bg-blue-900 hover:bg-blue-800' : 'border-transparent'}
+        ${isPaused ? 'opacity-75' : ''}
       `}
       onClick={() => onSelect(symbol)}
       onKeyDown={(e) => {
@@ -88,18 +90,35 @@ const StockTickerItem: React.FC<StockTickerItemProps> = ({ stock, isSelected, on
       role="button"
       aria-pressed={isSelected}
     >
+      {/* Pause overlay indicator */}
+      {isPaused && (
+        <div className="absolute top-2 right-2 flex items-center">
+          <svg className="w-3 h-3 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      )}
+      
       <div className="flex justify-between items-center">
         <div>
-          <div className={`font-medium ${symbol === 'B&O' ? 'text-yellow-400' : 'text-white'}`}>{symbol}</div>
-          <div className="text-sm text-gray-400 truncate max-w-[180px]">{name}</div>
+          <div className={`text-lg font-bold flex items-center gap-2 ${
+            symbol === 'B&O' ? 'text-yellow-400' : 'text-white'
+          }`}>
+            {symbol}
+            {/* Small pause indicator next to symbol */}
+            {isPaused && (
+              <span className="text-xs text-yellow-400">⏸</span>
+            )}
+          </div>
+          <div className="text-base text-gray-300 truncate max-w-[200px]">{name}</div>
         </div>
         
         <div className="text-right">
-          <span className={`font-semibold block ${getPriceColorBasedOnInitial(stock.currentPrice, stock.initialPrice)}`} ref={priceRef}>
+          <span className={`text-lg font-bold block ${getPriceColorBasedOnInitial(stock.currentPrice, stock.initialPrice)}`} ref={priceRef}>
             {formatPrice(currentPrice, tickerState.selectedCurrency)}
           </span>
           
-          <div className={`flex items-center text-sm ${getPriceChangeClasses(percentageChange)}`}>
+          <div className={`flex items-center text-base ${getPriceChangeClasses(percentageChange)}`}>
             {percentageChange > 0 ? (
               <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
@@ -116,8 +135,10 @@ const StockTickerItem: React.FC<StockTickerItemProps> = ({ stock, isSelected, on
         </div>
       </div>
       
-      <div className="mt-1 text-xs text-gray-500 text-right">
-        {getTimeSinceUpdate(lastUpdated)}
+      <div className={`mt-1 text-xs text-right ${
+        isPaused ? 'text-yellow-400' : 'text-gray-500'
+      }`}>
+        {isPaused ? 'Updates paused' : getTimeSinceUpdate(lastUpdated)}
       </div>
     </div>
   );

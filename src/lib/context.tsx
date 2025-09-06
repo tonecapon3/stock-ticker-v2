@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { createContext, useContext, useState, useEffect, ReactNode, useRef, useCallback, ErrorInfo } from 'react';
+import { logger } from '../config/env';
 import { 
   StockInfo, 
   TickerContextType, 
@@ -25,6 +26,8 @@ import {
   convertCurrency,
   CURRENCY_RATES,
 } from './types';
+import { shouldUseApiServer, buildApiUrl, API_ENDPOINTS, isDevelopment, checkApiHealth } from './config';
+import { generateMultipleStockHistories, generateRealisticPriceChange, updatePriceHistory } from '../utils/dataGenerator';
 
 // Secure storage response type definition
 interface SecureStorageResponse<T> {
@@ -46,7 +49,7 @@ function checkMemoryUsage(memStats: MemoryStats): ValidationResult {
     }
     return { isValid: true };
   } catch (err) {
-    console.error('Error checking memory usage:', err);
+    logger.error('Error checking memory usage:', err);
     return {
       isValid: false,
       errorMessage: `Failed to check memory: ${err instanceof Error ? err.message : String(err)}`
@@ -162,39 +165,34 @@ function maskSensitiveData(data: any): any {
 export const TickerContext = createContext<TickerContextType | undefined>(undefined);
 
 // Default stock ticker configuration
-const DEFAULT_UPDATE_INTERVAL = 2000; // 2 seconds
-const DEFAULT_STOCKS: StockInfo[] = [
-  {
-    symbol: 'BNOX',
-    name: 'Bane&Ox',
-    currentPrice: 185.75,
-    previousPrice: 185.75,
-    initialPrice: 185.75,
-    percentageChange: 0,
-    lastUpdated: new Date(),
-    priceHistory: [{ timestamp: new Date(), price: 185.75 }],
-  },
-  {
-    symbol: 'GOOGL',
-    name: 'Alphabet Inc.',
-    currentPrice: 176.30,
-    previousPrice: 176.30,
-    initialPrice: 176.30,
-    percentageChange: 0,
-    lastUpdated: new Date(),
-    priceHistory: [{ timestamp: new Date(), price: 176.30 }],
-  },
-  {
-    symbol: 'MSFT',
-    name: 'Microsoft Corporation',
-    currentPrice: 415.20,
-    previousPrice: 415.20,
-    initialPrice: 415.20,
-    percentageChange: 0,
-    lastUpdated: new Date(),
-    priceHistory: [{ timestamp: new Date(), price: 415.20 }],
-  },
+const DEFAULT_UPDATE_INTERVAL = 1000; // 1 second for smoother updates
+
+// Generate fake price histories for default stocks
+const defaultStockData = [
+  { symbol: 'BNOX', name: 'Bane&Ox Inc.', basePrice: 185.75 },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', basePrice: 176.30 },
+  { symbol: 'MSFT', name: 'Microsoft Corporation', basePrice: 415.20 },
 ];
+
+// Generate historical data for all stocks
+const stockHistories = generateMultipleStockHistories(defaultStockData);
+
+const DEFAULT_STOCKS: StockInfo[] = defaultStockData.map(stock => {
+  const priceHistory = stockHistories[stock.symbol];
+  // Get the most recent price from the generated history
+  const mostRecentPrice = priceHistory[priceHistory.length - 1].price;
+  
+  return {
+    symbol: stock.symbol,
+    name: stock.name,
+    currentPrice: mostRecentPrice,
+    previousPrice: priceHistory.length > 1 ? priceHistory[priceHistory.length - 2].price : mostRecentPrice,
+    initialPrice: stock.basePrice,
+    percentageChange: ((mostRecentPrice - stock.basePrice) / stock.basePrice) * 100,
+    lastUpdated: new Date(),
+    priceHistory: priceHistory,
+  };
+});
 
 /**
  * Error boundary component for catching and displaying errors
@@ -329,12 +327,12 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   };
 
   /**
-   * Set price for a specific stock and update its price history
-   * with validation and rate limiting
+   * Set price for a specific stock with validation and rate limiting
    */
   const setPrice = useCallback((symbol: string, price: number): ValidationResult => {
     try {
-      // Sanitize and validate input
+      
+      // Regular single stock price update
       const sanitizedSymbol = sanitizeStockSymbol(symbol);
       const symbolValidation = validateStockSymbol(sanitizedSymbol);
       if (!symbolValidation.isValid) {
@@ -767,6 +765,255 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [tickerState.isPaused, safelyUpdateState, setError]);
 
   /**
+   * Fetch stocks from API server
+   */
+  const fetchStocksFromAPI = useCallback(async (): Promise<void> => {
+    // Skip API calls if no API server is configured
+    if (!shouldUseApiServer()) {
+      console.log('🏭 API server disabled, using local data only');
+      return;
+    }
+    
+    console.log('🔄 Attempting to fetch stocks from API...');
+    try {
+      const apiUrl = buildApiUrl(API_ENDPOINTS.STOCKS);
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // Note: In a real implementation, you'd want to handle authentication
+          // For now, we'll just fetch without auth for the main app
+        },
+      });
+      
+      console.log('📡 API Response status:', response.status);
+      
+      if (!response.ok) {
+        // If API is not available, continue with local data
+        console.warn('⚠️ API server not available, using local stock data');
+        return;
+      }
+      
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('⚠️ API server returned non-JSON response, using local stock data');
+        return;
+      }
+      
+      let data;
+      try {
+        data = await response.json();
+        console.log('📊 Received data from API:', data);
+      } catch (jsonError) {
+        console.warn('⚠️ Failed to parse API JSON response:', jsonError);
+        return;
+      }
+      
+      if (data.success && data.stocks) {
+        console.log('✅ Merging API data with local state intelligently');
+        safelyUpdateState(prevState => {
+          console.log('📈 Previous stocks:', prevState.stocks.length);
+          
+          // Intelligently merge API data with local data
+          const mergedStocks = prevState.stocks.map(localStock => {
+            // Find corresponding API stock
+            const apiStock = data.stocks.find((s: any) => s.symbol === localStock.symbol);
+            
+            if (!apiStock) {
+              // Keep local stock if not found in API
+              return localStock;
+            }
+            
+            // Convert API timestamps
+            const apiPriceHistory = apiStock.priceHistory.map((point: any) => ({
+              ...point,
+              timestamp: new Date(point.timestamp)
+            }));
+            
+            // If API has richer data (more points), use it
+            // Otherwise, preserve local rich data and just update current price
+            let finalPriceHistory;
+            if (apiPriceHistory.length >= localStock.priceHistory.length) {
+              // API has equal or more data points, use API data
+              console.log(`📊 ${localStock.symbol}: Using API data (${apiPriceHistory.length} points)`);
+              finalPriceHistory = apiPriceHistory;
+            } else {
+              // Local data is richer, merge intelligently
+              console.log(`📊 ${localStock.symbol}: Merging API current price with local history`);
+              
+              // Update local history with API's current price if it's newer
+              const apiLastUpdate = new Date(apiStock.lastUpdated);
+              const localLastUpdate = localStock.lastUpdated;
+              
+              if (apiLastUpdate > localLastUpdate) {
+                // API has newer data, add the new price point
+                finalPriceHistory = updatePriceHistory(
+                  localStock.priceHistory,
+                  apiStock.currentPrice,
+                  MAX_HISTORY_POINTS
+                );
+              } else {
+                // Keep local data as it's more recent
+                finalPriceHistory = localStock.priceHistory;
+              }
+            }
+            
+            // Return merged stock data
+            return {
+              ...localStock,
+              currentPrice: apiStock.currentPrice,
+              previousPrice: apiStock.previousPrice,
+              percentageChange: apiStock.percentageChange,
+              lastUpdated: new Date(apiStock.lastUpdated),
+              priceHistory: finalPriceHistory
+            };
+          });
+          
+          // Add any new stocks from API that don't exist locally
+          data.stocks.forEach((apiStock: any) => {
+            if (!mergedStocks.find(s => s.symbol === apiStock.symbol)) {
+              console.log(`📊 Adding new stock from API: ${apiStock.symbol}`);
+              mergedStocks.push({
+                ...apiStock,
+                lastUpdated: new Date(apiStock.lastUpdated),
+                priceHistory: apiStock.priceHistory.map((point: any) => ({
+                  ...point,
+                  timestamp: new Date(point.timestamp)
+                }))
+              });
+            }
+          });
+          
+          console.log('📈 Merged stocks:', mergedStocks.length);
+          
+          return {
+            ...prevState,
+            stocks: mergedStocks
+          };
+        });
+        console.log('✅ Intelligent merge completed successfully');
+      } else {
+        console.warn('⚠️ API response missing success or stocks data');
+      }
+    } catch (err) {
+      // Silently continue with local data if API is unavailable
+      console.error('❌ Could not fetch from API, using local data:', err);
+    }
+  }, [safelyUpdateState]);
+  
+  /**
+   * Fetch controls from API server
+   */
+  const fetchControlsFromAPI = useCallback(async (): Promise<void> => {
+    // Skip API calls if no API server is configured
+    if (!shouldUseApiServer()) {
+      console.log('🏭 API server disabled, using local controls only');
+      return;
+    }
+    
+    console.log('🔄 Attempting to fetch controls from API...');
+    try {
+      const apiUrl = buildApiUrl(API_ENDPOINTS.CONTROLS);
+      const response = await fetch(apiUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // No authentication needed for controls endpoint
+        },
+      });
+      
+      console.log('📡 Controls API Response status:', response.status);
+      
+      if (!response.ok) {
+        // If API is not available, continue with local data
+        console.warn('⚠️ Controls API server not available, using local control data');
+        return;
+      }
+      
+      // Check if response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        console.warn('⚠️ Controls API server returned non-JSON response, using local control data');
+        return;
+      }
+      
+      let data;
+      try {
+        data = await response.json();
+        console.log('📊 Received controls data from API:', data);
+      } catch (jsonError) {
+        console.warn('⚠️ Failed to parse controls API JSON response:', jsonError);
+        return;
+      }
+      
+      if (data.success && data.controls) {
+        console.log('✅ Updating local state with API control data');
+        safelyUpdateState(prevState => {
+          const newPaused = data.controls.isPaused;
+          const newCurrency = data.controls.selectedCurrency;
+          const newInterval = data.controls.updateIntervalMs;
+          
+          console.log(`🎛️ Syncing controls - Paused: ${prevState.isPaused} → ${newPaused}, Currency: ${prevState.selectedCurrency} → ${newCurrency}`);
+          
+          return {
+            ...prevState,
+            isPaused: newPaused,
+            selectedCurrency: newCurrency,
+            updateIntervalMs: newInterval
+          };
+        });
+        console.log('✅ Control state updated successfully');
+      } else {
+        console.warn('⚠️ API response missing success or controls data');
+      }
+    } catch (err) {
+      // Silently continue with local data if API is unavailable
+      console.error('❌ Could not fetch controls from API, using local data:', err);
+    }
+  }, [safelyUpdateState]);
+
+  /**
+   * Effect to sync with API server periodically
+   */
+  useEffect(() => {
+    console.log('🔄 Setting up API sync...');
+    
+    // Check API health first
+    const initializeApiSync = async () => {
+      if (shouldUseApiServer()) {
+        console.log('🌡️ Checking API server health...');
+        const healthCheck = await checkApiHealth(3000);
+        
+        if (healthCheck.isHealthy) {
+          console.log(`✅ API server is healthy (${healthCheck.responseTime}ms response time)`);
+        } else {
+          console.warn(`⚠️ API server health check failed: ${healthCheck.error}`);
+          console.warn('💡 Application will run in local-only mode');
+        }
+      }
+      
+      // Initial fetch from API (will gracefully fail if unhealthy)
+      fetchStocksFromAPI();
+      fetchControlsFromAPI();
+    };
+    
+    initializeApiSync();
+    
+    // Set up periodic sync with API server
+    const apiSyncInterval = setInterval(() => {
+      console.log('⏰ Periodic API sync triggered');
+      fetchStocksFromAPI();
+      fetchControlsFromAPI();
+    }, 5000); // Sync every 5 seconds to reduce server load
+    
+    return () => {
+      console.log('🛑 Cleaning up API sync interval');
+      clearInterval(apiSyncInterval);
+    };
+  }, [fetchStocksFromAPI, fetchControlsFromAPI]);
+
+  /**
    * Effect to update prices randomly on an interval
    * with proper cleanup
    */
@@ -786,31 +1033,42 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         safelyUpdateState(prevState => {
           // Skip updates if paused (double-check)
           if (prevState.isPaused) return prevState;
+          
+          // Check if API server is available and providing data
+          const isApiActive = shouldUseApiServer();
+          
+          // If API is active, reduce local update frequency to avoid conflicts
+          if (isApiActive) {
+            // Only update occasionally when API is active (let API drive updates)
+            const shouldSkipUpdate = Math.random() > 0.3; // Skip 70% of local updates
+            if (shouldSkipUpdate) {
+              console.log('🔄 Skipping local update - letting API drive changes');
+              return prevState;
+            }
+          }
 
-          // Update each stock with a small random price fluctuation
+          console.log(`💫 Performing ${isApiActive ? 'supplemental' : 'primary'} local price update`);
+          
+          // Update each stock with realistic price fluctuation
           const updatedStocks = prevState.stocks.map((stock) => {
-            // Generate a random fluctuation between -2% and +2%
-            const fluctuationPercent = (Math.random() * 4) - 2;
-            const fluctuation = stock.currentPrice * (fluctuationPercent / 100);
-            const newPrice = Math.max(SECURITY_CONSTRAINTS.MIN_STOCK_PRICE, 
-                             Math.min(SECURITY_CONSTRAINTS.MAX_STOCK_PRICE, 
-                                    stock.currentPrice + fluctuation));
+            // Use smaller changes when API is active
+            const maxChange = isApiActive ? 0.5 : 2; // Smaller changes when API is active
+            const newPrice = generateRealisticPriceChange(stock.currentPrice, maxChange);
             
-            const percentageChange = ((newPrice - stock.previousPrice) / stock.previousPrice) * 100;
+            // Ensure price stays within security constraints
+            const constrainedPrice = Math.max(SECURITY_CONSTRAINTS.MIN_STOCK_PRICE, 
+                                     Math.min(SECURITY_CONSTRAINTS.MAX_STOCK_PRICE, newPrice));
+            
+            const percentageChange = ((constrainedPrice - stock.initialPrice) / stock.initialPrice) * 100;
             const timestamp = new Date();
             
-            // Add the new price to history, keeping only MAX_HISTORY_POINTS
-            const newPricePoint: PricePoint = { timestamp, price: newPrice };
-            const updatedHistory = [...stock.priceHistory, newPricePoint];
-            
-            if (updatedHistory.length > MAX_HISTORY_POINTS) {
-              updatedHistory.shift(); // Remove oldest point if exceeding max
-            }
+            // Update price history using the utility function
+            const updatedHistory = updatePriceHistory(stock.priceHistory, constrainedPrice, MAX_HISTORY_POINTS);
             
             return {
               ...stock,
               previousPrice: stock.currentPrice,
-              currentPrice: newPrice,
+              currentPrice: constrainedPrice,
               percentageChange,
               lastUpdated: timestamp,
               priceHistory: updatedHistory,

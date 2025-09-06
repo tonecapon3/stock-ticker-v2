@@ -1,37 +1,8 @@
 // Import jest-dom additions
-import '@testing-library/jest-dom';
+require('@testing-library/jest-dom');
 
-// Mock the next/router
-jest.mock('next/router', () => ({
-  useRouter() {
-    return {
-      push: jest.fn(),
-      pathname: '',
-      route: '',
-      asPath: '',
-      query: {},
-    };
-  },
-}));
-
-// Mock next/navigation
-jest.mock('next/navigation', () => ({
-  useRouter() {
-    return {
-      push: jest.fn(),
-      replace: jest.fn(),
-      prefetch: jest.fn(),
-      back: jest.fn(),
-      forward: jest.fn(),
-    };
-  },
-  usePathname() {
-    return '';
-  },
-  useSearchParams() {
-    return new URLSearchParams();
-  },
-}));
+// Mock Next.js modules only if they're used in the components
+// Remove router mocks as they're not needed for our current tests
 
 // Reset all mocks before each test
 beforeEach(() => {
@@ -39,9 +10,6 @@ beforeEach(() => {
 });
 
 // Add any global setup needed for Jest tests here
-
-// Import jest-dom for DOM element assertions
-import '@testing-library/jest-dom';
 
 // To fix requestAnimationFrame error in some tests
 if (typeof window !== 'undefined') {

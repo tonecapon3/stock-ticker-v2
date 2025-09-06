@@ -1,16 +1,42 @@
 import React from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { TickerProvider } from './lib/context';
 import AccessControl from './components/AccessControl';
 import { TabContent } from './components/TabContent';
 import TickerPage from './pages/TickerPage';
 import ControlsPage from './pages/ControlsPage';
 import HomePage from './pages/HomePage';
+import RemoteControlPanel from './pages/RemoteControlPanel';
+import { useSecurity } from './hooks/useSecurity';
+import SecurityWarning from './components/SecurityWarning';
 
 function App() {
+  return (
+    <Router>
+      <Routes>
+        {/* Remote Control Panel Route */}
+        <Route path="/remote" element={<RemoteControlPanel />} />
+        
+        {/* Main Application Route */}
+        <Route path="/" element={<MainApp />} />
+        
+        {/* Fallback Route */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Router>
+  );
+}
+
+// Separate component for the main app
+function MainApp() {
+  const securityState = useSecurity();
+
   return (
     <AccessControl>
       <TickerProvider>
         <div className="min-h-screen bg-gray-900">
+          {/* Security Warning Banner */}
+          <SecurityWarning securityState={securityState} />
           {/* Header section */}
           <header className="bg-blue-800 text-white shadow-md">
             <div className="container mx-auto py-4 px-6">
@@ -29,6 +55,7 @@ function App() {
             {/* Default home content */}
             <HomePage />
           </main>
+          
           
           {/* Footer section */}
           <footer className="bg-gray-800 border-t border-gray-700 mt-12">

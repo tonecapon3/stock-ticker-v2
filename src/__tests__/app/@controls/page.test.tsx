@@ -3,11 +3,11 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import '@testing-library/jest-dom';
 
-import ControlsPage from '../../../app/@controls/page';
-import { TickerProvider } from '../../../lib/context';
+import ControlsPage from '../../pages/ControlsPage';
+import { TickerProvider } from '../../lib/context';
 
 // Mock the context with more controlled behavior for testing
-jest.mock('../../../lib/context', () => {
+jest.mock('../../lib/context', () => {
   const originalModule = jest.requireActual('@/lib/context');
   
   // Create mock implementation of provider functions
@@ -53,7 +53,7 @@ jest.mock('../../../lib/context', () => {
 
 // Helper function to get the mock functions
 const getMockFunctions = () => {
-  const { useTickerContext } = require('../../../lib/context');
+  const { useTickerContext } = require('../../lib/context');
   const context = useTickerContext();
   return {
     setPrice: context.setPrice,
@@ -141,11 +141,63 @@ describe('ControlsPage Component', () => {
     // Find stock dropdown
     const stockSelect = screen.getByLabelText(/Select Stock/i);
     
+    // Verify "All Stocks" option is present
+    expect(screen.getByText(/🔥 All Stocks - Apply to Everything/i)).toBeInTheDocument();
+    
     // Select different stock
     await user.selectOptions(stockSelect, 'MSFT');
     
     // Verify the selected option changed
     expect((stockSelect as HTMLSelectElement).value).toBe('MSFT');
+    
+    // Test selecting "All Stocks"
+    await user.selectOptions(stockSelect, 'ALL_STOCKS');
+    expect((stockSelect as HTMLSelectElement).value).toBe('ALL_STOCKS');
+  });
+  
+  test('bulk update mode displays when All Stocks selected', async () => {
+    const user = userEvent.setup();
+    render(
+      <TickerProvider>
+        <ControlsPage />
+      </TickerProvider>
+    );
+    
+    // Find stock dropdown and select "All Stocks"
+    const stockSelect = screen.getByLabelText(/Select Stock/i);
+    await user.selectOptions(stockSelect, 'ALL_STOCKS');
+    
+    // Verify bulk update mode is displayed
+    expect(screen.getByText(/All stocks will be updated to the same price/i)).toBeInTheDocument();
+    expect(screen.getByText(/Enter price for all stocks:/i)).toBeInTheDocument();
+    
+    // Verify the slider is hidden (price slider shouldn't exist for bulk updates)
+    expect(screen.queryByLabelText(/Current Price:/i, { selector: 'input[type="range"]' })).not.toBeInTheDocument();
+    
+    // Verify all stocks are listed
+    expect(screen.getByText(/AAPL - Apple Inc./i)).toBeInTheDocument();
+    expect(screen.getByText(/MSFT - Microsoft Corporation/i)).toBeInTheDocument();
+  });
+  
+  test('bulk price update works for All Stocks', async () => {
+    const user = userEvent.setup();
+    render(
+      <TickerProvider>
+        <ControlsPage />
+      </TickerProvider>
+    );
+    
+    // Select "All Stocks"
+    const stockSelect = screen.getByLabelText(/Select Stock/i);
+    await user.selectOptions(stockSelect, 'ALL_STOCKS');
+    
+    // Find bulk price input and set a value
+    const bulkPriceInput = screen.getByLabelText(/Enter price for all stocks:/i);
+    await user.type(bulkPriceInput, '300');
+    
+    // Check if setPrice was called with ALL_STOCKS symbol
+    const { setPrice } = getMockFunctions();
+    expect(setPrice).toHaveBeenCalledWith('ALL_STOCKS', 300);
   });
   
   test('price adjustment slider changes stock price', async () => {

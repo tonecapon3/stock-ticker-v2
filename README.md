@@ -1,37 +1,82 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Stock Ticker
+
+This is a real-time stock ticker application built with [React](https://react.dev/) and [Vite](https://vitejs.dev/).
+
+## Features
+
+- Real-time stock price updates
+- Support for multiple currencies
+- Interactive price history charts
+- Ability to add, remove, and manually adjust stocks
+- Secure access control and input handling
+- Session management with logout functionality
+
+## Tech Stack
+
+- **Framework**: React
+- **Build Tool**: Vite
+- **Language**: TypeScript
+- **Styling**: Tailwind CSS
+- **Charting**: Chart.js
+- **Testing**: Jest & React Testing Library
 
 ## Getting Started
 
-First, run the development server:
+First, install the dependencies:
+
+```bash
+npm install
+```
+
+Then, run the development server:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
+npm run server (this will start the API server which will allow the remote control panel to communicate with the main stock page)
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+> stock-ticker@0.1.0 server
+> node server.js
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+[dotenv@17.2.1] injecting env (22) from .env.local -- tip: ⚙️  write to custom object with { processEnv: myObject }
+🚀 Remote Control Panel API Server running on http://localhost:3001
+📋 Available endpoints:
+  POST /api/remote/auth - Login
+  GET  /api/remote/auth - Verify token
+  GET  /api/remote/stocks - Get all stocks
+  POST /api/remote/stocks - Add stock
+  PUT  /api/remote/stocks/:symbol - Update stock
+  DELETE /api/remote/stocks/:symbol - Delete stock
+  GET  /api/remote/controls - Get system controls
+  PUT  /api/remote/controls - Update controls
+  POST /api/remote/controls/emergency - Emergency stop
+  GET  /api/remote/status - Get system status
+  POST /api/remote/status/health - Health check
+  POST /api/remote/restart - Restart server (admin only)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+🔑 Available accounts:
+  Username: admin (full access)
+  Username: controller (control access)
+  ⚠️  Use environment-configured passwords
 
-## Learn More
+🔧 Environment Status:
+  Admin hash: ✅ SET
+  Controller hash: ✅ SET
 
-To learn more about Next.js, take a look at the following resources:
+  =====================
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result to get to the main stock page.
+Open [http://localhost:3000/remote](http://localhost:3000/remote) with your browser to see the result to get to the remote control page.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+You can start editing the application by modifying files in the `src` directory. The application will auto-update as you edit the files.
 
-## Deploy on Vercel
+## Available Scripts
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+In the project directory, you can run:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-# stock-ticker
+- `npm run dev`: Runs the app in the development mode.
+- `npm run server`: Runs the api server for the remote control panel.
+- `npm run build`: Builds the app for production to the `dist` folder.
+- `npm run preview`: Serves the production build locally.
+- `npm test`: Launches the test runner in the interactive watch mode.
+- `npm run lint`: Lints the project files.
