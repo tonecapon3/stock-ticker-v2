@@ -1,0 +1,15 @@
+src/
+dist/
+public/
+*.md
+vite.config.ts
+tailwind.config.js
+postcss.config.js
+.env.local
+.env.example
+*.log
+test/
+tests/
+__tests__/
+*.test.*
+*.spec.*

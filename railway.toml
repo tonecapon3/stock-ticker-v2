@@ -1,0 +1,13 @@
+[build]
+builder = "nixpacks"
+
+[build.nixpacksConfig]
+buildCmd = "echo 'Skipping build for API server only'"
+
+[deploy]
+startCommand = "node hello.cjs"
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10
+
+[variables]
+NODE_ENV = "production"

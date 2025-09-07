@@ -2,10 +2,12 @@
   "name": "stock-ticker",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "start": "node server-simple.js",
+    "start": "node hello.cjs",
     "dev": "vite",
-    "build": "vite build",
+    "build": "echo 'Skipping build for API server deployment'",
+    "heroku-postbuild": "echo 'Skipping postbuild for API server deployment'",
     "build:production": "vite build --mode production",
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
@@ -33,6 +35,10 @@
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^18",
     "react-router-dom": "^7.7.1"
+  },
+  "engines": {
+    "node": ">=20.19.0",
+    "npm": ">=10.0.0"
   },
   "overrides": {
     "glob": "^10.4.5"

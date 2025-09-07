@@ -1,0 +1,9 @@
+[build]
+cmd = "echo 'Skipping build step for API server only'"
+
+[start]
+cmd = "node hello.cjs"
+
+[variables]
+NODE_ENV = "production"
+NODE_VERSION = "20.19.0"
