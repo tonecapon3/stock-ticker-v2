@@ -1,1 +1,1 @@
-web: node server-railway.js
+web: node server-railway.cjs
