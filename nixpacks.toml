@@ -2,7 +2,7 @@
 cmd = "echo 'Skipping build step for API server only'"
 
 [start]
-cmd = "node hello.cjs"
+cmd = "node server.js"
 
 [variables]
 NODE_ENV = "production"

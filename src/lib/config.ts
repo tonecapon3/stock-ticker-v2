@@ -4,32 +4,32 @@
 
 // Get the API base URL based on environment
 export const getApiBaseUrl = (): string => {
-  // Check if we're in development mode
-  const isDevelopment = import.meta.env.DEV || 
-                       window.location.hostname === 'localhost' || 
-                       window.location.hostname === '127.0.0.1';
-  
   const apiUrl = import.meta.env.VITE_API_BASE_URL;
   
-  if (isDevelopment) {
-    // Development: use configured URL or fallback to localhost
-    return apiUrl || 'http://localhost:3002';
+  // If API URL is explicitly configured, use it (prioritize environment variable)
+  if (apiUrl && 
+      apiUrl.trim() !== '' && 
+      (apiUrl.startsWith('https://') || apiUrl.startsWith('http://'))) {
+    
+    console.log(`🌐 API server configured: ${apiUrl.replace(/\/+$/, '')}`);
+    return apiUrl.replace(/\/+$/, ''); // Remove trailing slashes
+  }
+  
+  // Check if we're in local development without API URL configured
+  const isLocalDevelopment = (import.meta.env.DEV || 
+                             window.location.hostname === 'localhost' || 
+                             window.location.hostname === '127.0.0.1') && 
+                            !apiUrl;
+  
+  if (isLocalDevelopment) {
+    // Development mode with no API URL configured: use local server
+    console.log('🏠 Development mode: using local API server');
+    return 'http://localhost:3002';
   } else {
-    // Production: only use API URL if it's properly configured and not localhost
-    if (apiUrl && 
-        apiUrl.trim() !== '' && 
-        !apiUrl.includes('localhost') && 
-        !apiUrl.includes('127.0.0.1') &&
-        (apiUrl.startsWith('https://') || apiUrl.startsWith('http://'))) {
-      
-      console.log(`🌐 Production API server configured: ${apiUrl.replace(/\/+$/, '')}`);
-      return apiUrl.replace(/\/+$/, ''); // Remove trailing slashes
-    } else {
-      // Production mode: API server not properly configured, use local-only mode
-      console.warn('⚠️ Production API server not configured properly. Using local-only mode.');
-      console.warn('💡 Set VITE_API_BASE_URL to your deployed API server URL.');
-      return '';
-    }
+    // No API server configured
+    console.warn('⚠️ API server not configured. Using local-only mode.');
+    console.warn('💡 Set VITE_API_BASE_URL to your deployed API server URL.');
+    return '';
   }
 };
 
