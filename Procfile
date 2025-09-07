@@ -1,1 +1,1 @@
-web: npm run server:production
+web: node server-railway.js
