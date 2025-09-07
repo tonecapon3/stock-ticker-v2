@@ -55,24 +55,39 @@ function generateRealisticPriceChange(currentPrice, maxChangePercent = 2) {
 }
 
 // Load environment variables based on NODE_ENV
-const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.env.local';
-console.log(`🔧 Loading environment from: ${envFile}`);
-dotenv.config({ path: envFile });
+if (process.env.NODE_ENV === 'production') {
+  console.log('🔧 Production mode: Using Railway environment variables');
+  // In production (Railway), environment variables are already loaded
+  // No need to load from file
+} else {
+  console.log('🔧 Development mode: Loading from .env.local');
+  dotenv.config({ path: '.env.local' });
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.REMOTE_PORT || 3001;
+const PORT = process.env.PORT || process.env.REMOTE_PORT || 3001;
 
 // Security Configuration - All secrets from environment variables
 const JWT_SECRET = process.env.REMOTE_JWT_SECRET;
 const API_KEY = process.env.REMOTE_API_KEY;
 const ALLOWED_ORIGINS = (process.env.REMOTE_ALLOWED_ORIGINS || 'http://localhost:3000').split(',');
 
+// Debug: Log environment variable status
+console.log('🔍 Environment Variables Check:');
+console.log('  NODE_ENV:', process.env.NODE_ENV);
+console.log('  PORT:', process.env.PORT);
+console.log('  REMOTE_PORT:', process.env.REMOTE_PORT);
+console.log('  JWT_SECRET:', JWT_SECRET ? '✅ SET (' + JWT_SECRET.length + ' chars)' : '❌ MISSING');
+console.log('  API_KEY:', API_KEY ? '✅ SET' : '❌ MISSING');
+console.log('  ALLOWED_ORIGINS:', ALLOWED_ORIGINS.length, 'origins');
+
 // Validate required environment variables
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
   console.error('❌ REMOTE_JWT_SECRET is required and must be at least 32 characters');
+  console.error('   Current value:', JWT_SECRET ? 'SET but too short' : 'NOT SET');
   console.error('Generate one with: openssl rand -base64 32');
   process.exit(1);
 }
