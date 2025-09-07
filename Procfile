@@ -1,1 +1,1 @@
-web: node server-railway.cjs
+web: node server-minimal.cjs

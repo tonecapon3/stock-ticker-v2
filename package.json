@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server-railway.cjs",
+    "start": "node server-minimal.cjs",
     "dev": "vite",
     "build": "vite build",
     "build:production": "vite build --mode production",
