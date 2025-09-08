@@ -1,5 +1,5 @@
 // Absolute minimal server for Railway testing
-const http = require('http');
+import http from 'http';
 
 console.log('🚀 Starting minimal test server...');
 console.log('PORT:', process.env.PORT);
