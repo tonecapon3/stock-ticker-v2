@@ -739,6 +739,24 @@ app.post('/api/remote/status/health', (req, res) => {
   });
 });
 
+// GET endpoint for health check (used by Render health checks)
+app.get('/api/remote/status/health', (req, res) => {
+  const startTime = Date.now();
+  
+  const healthChecks = {
+    api: 'ok',
+    responseTime: Date.now() - startTime,
+    timestamp: new Date(),
+    version: '1.0.0'
+  };
+
+  res.json({
+    success: true,
+    health: 'healthy',
+    checks: healthChecks
+  });
+});
+
 // Server restart endpoint
 app.post('/api/remote/restart', verifyToken, (req, res) => {
   try {
@@ -798,6 +816,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('  PUT  /api/remote/controls - Update controls');
   console.log('  POST /api/remote/controls/emergency - Emergency stop');
   console.log('  GET  /api/remote/status - Get system status');
+  console.log('  GET  /api/remote/status/health - Health check');
   console.log('  POST /api/remote/status/health - Health check');
   console.log('  POST /api/remote/restart - Restart server (admin only)');
   console.log('\n🔑 Available accounts:');
