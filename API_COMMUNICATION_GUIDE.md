@@ -15,7 +15,7 @@ VITE_LOG_LEVEL=error
 **Backend Environment Variables** (Set where your API server is deployed):
 ```bash
 NODE_ENV=production
-REMOTE_ALLOWED_ORIGINS=https://your-frontend-domain.com,https://staging.d7mi4rttj0a8.amplifyapp.com
+REMOTE_ALLOWED_ORIGINS=https://your-frontend-domain.com,https://staging.d49gw0148cutm.amplifyapp.com
 REMOTE_JWT_SECRET=your-production-jwt-secret
 REMOTE_API_KEY=your-production-api-key
 REMOTE_PORT=3002

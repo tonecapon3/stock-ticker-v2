@@ -22,7 +22,7 @@ services:
         value: controller
       - key: REMOTE_CONTROLLER_PASSWORD_HASH
         sync: false
-    healthCheckPath: /api/remote/status/health
+    healthCheckPath: /status/health
     disk:
       name: data
       mountPath: /opt/render/project/data

@@ -24,7 +24,7 @@ The Stock Ticker application consists of:
 4. **Configure environment variables** in Railway dashboard:
    ```
    NODE_ENV=production
-   REMOTE_ALLOWED_ORIGINS=https://yourdomain.com,https://staging.d7mi4rttj0a8.amplifyapp.com
+   REMOTE_ALLOWED_ORIGINS=https://yourdomain.com,https://staging.d49gw0148cutm.amplifyapp.com
    REMOTE_JWT_SECRET=G747l1L8iCQqIT7v28eXvtQuD+Ryv7rDkx2aX909BaQ=
    REMOTE_API_KEY=VX/In0jzS8VW+qrA8FORVIeGu6AvJiSg
    REMOTE_PORT=3002
@@ -106,7 +106,7 @@ Once you have your frontend URL, update the API server's CORS configuration:
 
 1. **Add frontend URL to REMOTE_ALLOWED_ORIGINS**:
    ```
-   REMOTE_ALLOWED_ORIGINS=https://your-frontend-domain.com,https://staging.d7mi4rttj0a8.amplifyapp.com
+   REMOTE_ALLOWED_ORIGINS=https://your-frontend-domain.com,https://staging.d49gw0148cutm.amplifyapp.com
    ```
 
 2. **Redeploy API server** with updated environment variables

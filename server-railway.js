@@ -26,6 +26,27 @@ app.post('/api/remote/status/health', (req, res) => {
   });
 });
 
+// Frontend-compatible health check endpoints
+app.post('/status/health', (req, res) => {
+  res.json({
+    success: true,
+    health: 'healthy',
+    timestamp: new Date(),
+    version: '1.0.0',
+    server: 'stock-ticker-railway'
+  });
+});
+
+app.get('/status/health', (req, res) => {
+  res.json({
+    success: true,
+    health: 'healthy',
+    timestamp: new Date(),
+    version: '1.0.0',
+    server: 'stock-ticker-railway'
+  });
+});
+
 // Mock stock data
 const mockStocks = [
   {
@@ -102,6 +123,7 @@ app.get('/api/remote/controls', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`✅ Railway server running on port ${PORT}`);
   console.log(`🌐 Health check: http://localhost:${PORT}/api/remote/status/health`);
+  console.log(`🌐 Frontend health check: http://localhost:${PORT}/status/health`);
   console.log(`📊 Stocks API: http://localhost:${PORT}/api/remote/stocks`);
   console.log(`🎛️ Controls API: http://localhost:${PORT}/api/remote/controls`);
 });

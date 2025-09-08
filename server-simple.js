@@ -31,6 +31,16 @@ app.get('/status/health', (req, res) => {
   });
 });
 
+app.post('/status/health', (req, res) => {
+  res.json({
+    success: true,
+    health: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0',
+    server: 'stock-ticker-simple'
+  });
+});
+
 app.post('/api/remote/status/health', (req, res) => {
   res.json({
     success: true,
@@ -93,6 +103,7 @@ app.get('/', (req, res) => {
     health: 'OK',
     endpoints: [
       'GET /status/health',
+      'POST /status/health',
       'POST /api/remote/status/health', 
       'GET /api/remote/stocks',
       'GET /api/remote/controls'

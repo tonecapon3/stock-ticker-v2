@@ -757,6 +757,45 @@ app.get('/api/remote/status/health', (req, res) => {
   });
 });
 
+// Frontend-compatible health check endpoints (without /api/remote prefix)
+// POST /status/health - used by frontend health checks
+app.post('/status/health', (req, res) => {
+  const startTime = Date.now();
+  
+  const healthChecks = {
+    api: 'ok',
+    responseTime: Date.now() - startTime,
+    timestamp: new Date(),
+    version: '1.0.0',
+    server: 'stock-ticker-backend'
+  };
+
+  res.json({
+    success: true,
+    health: 'healthy',
+    checks: healthChecks
+  });
+});
+
+// GET /status/health - additional compatibility endpoint
+app.get('/status/health', (req, res) => {
+  const startTime = Date.now();
+  
+  const healthChecks = {
+    api: 'ok',
+    responseTime: Date.now() - startTime,
+    timestamp: new Date(),
+    version: '1.0.0',
+    server: 'stock-ticker-backend'
+  };
+
+  res.json({
+    success: true,
+    health: 'healthy',
+    checks: healthChecks
+  });
+});
+
 // Server restart endpoint
 app.post('/api/remote/restart', verifyToken, (req, res) => {
   try {
@@ -818,6 +857,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('  GET  /api/remote/status - Get system status');
   console.log('  GET  /api/remote/status/health - Health check');
   console.log('  POST /api/remote/status/health - Health check');
+  console.log('  GET  /status/health - Frontend health check');
+  console.log('  POST /status/health - Frontend health check');
   console.log('  POST /api/remote/restart - Restart server (admin only)');
   console.log('\n🔑 Available accounts:');
   console.log('  Username: admin (full access)');
