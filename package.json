@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js",
+    "start": "node diagnostic-server.js",
     "dev": "vite",
     "build": "echo 'Skipping build for API server deployment'",
     "heroku-postbuild": "echo 'Skipping postbuild for API server deployment'",
