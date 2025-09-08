@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: stock-ticker-api
+    env: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REMOTE_JWT_SECRET
+        sync: false
+      - key: REMOTE_API_KEY
+        sync: false
+      - key: REMOTE_ALLOWED_ORIGINS
+        sync: false
+      - key: REMOTE_ADMIN_USERNAME
+        value: admin
+      - key: REMOTE_ADMIN_PASSWORD_HASH
+        sync: false
+      - key: REMOTE_CONTROLLER_USERNAME
+        value: controller
+      - key: REMOTE_CONTROLLER_PASSWORD_HASH
+        sync: false
+    healthCheckPath: /api/remote/status/health
+    disk:
+      name: data
+      mountPath: /opt/render/project/data
+      sizeGB: 1
