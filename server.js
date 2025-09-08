@@ -785,8 +785,8 @@ function formatUptime(uptimeMs) {
 }
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Remote Control Panel API Server running on http://localhost:${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Remote Control Panel API Server running on http://0.0.0.0:${PORT}`);
   console.log('📋 Available endpoints:');
   console.log('  POST /api/remote/auth - Login');
   console.log('  GET  /api/remote/auth - Verify token');
