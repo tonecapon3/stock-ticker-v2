@@ -1,7 +1,7 @@
 import React, { useState, FormEvent, useEffect } from 'react';
+import { useClerk } from '@clerk/clerk-react';
 import { useTickerContext } from '../lib/context';
 import { StockInfo, Currency, CURRENCIES, formatPrice } from '../lib/types';
-import { logout } from '../components/AccessControl';
 import { shouldUseApiServer, buildApiUrl, API_ENDPOINTS } from '../lib/config';
 
 // Add global style for select dropdowns
@@ -67,6 +67,7 @@ const styleOptionsForDarkMode = () => {
 };
 
 export default function ControlsPage() {
+  const { signOut } = useClerk();
   const { tickerState, setPrice, updateSpeed, togglePause, addStock, removeStock, changeCurrency } = useTickerContext();
   const { stocks, updateIntervalMs, isPaused, selectedCurrency } = tickerState;
 
@@ -1170,32 +1171,25 @@ Apply Percentage Change
         </div>
       </div>
 
-      {/* Session Management */}
+      {/* Account Management */}
       <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-        <h3 className="font-medium mb-3">Session Management</h3>
+        <h3 className="font-medium mb-3">👤 Account Management</h3>
         <div className="space-y-3">
           <div className="text-xs text-gray-400 bg-gray-800 p-2 rounded mb-3">
-            <p>Click logout to end your current session and return to the login screen.</p>
+            <p>Sign out of your account and return to the login screen.</p>
           </div>
           <button
-            onClick={logout}
-            className="w-full py-2 px-4 text-white rounded-md transition-colors shadow-md font-medium"
-            style={{
-              backgroundColor: '#dc2626',
-              ':hover': {
-                backgroundColor: '#b91c1c'
-              }
-            }}
-            onMouseEnter={(e) => e.target.style.backgroundColor = '#b91c1c'}
-            onMouseLeave={(e) => e.target.style.backgroundColor = '#dc2626'}
+            onClick={() => signOut()}
+            className="w-full py-2 px-4 text-white rounded-md transition-colors shadow-md font-medium bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-900"
           >
             <svg className="w-4 h-4 mr-2 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
             </svg>
-            Logout
+            Sign Out
           </button>
         </div>
       </div>
+
     </div>
   );
 }

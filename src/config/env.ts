@@ -4,11 +4,6 @@
  */
 
 export interface EnvConfig {
-  // Access Control
-  accessCode: string;
-  sessionTimeout: number;
-  maxLoginAttempts: number;
-  
   // Development Settings
   debugMode: boolean;
   logLevel: 'debug' | 'info' | 'warn' | 'error';
@@ -28,46 +23,15 @@ export interface EnvConfig {
  * Validates and parses environment variables
  */
 function validateEnv(): EnvConfig {
-  const accessCode = import.meta.env.VITE_ACCESS_CODE;
-  
-  // Critical validation - access code is required
-  if (!accessCode) {
-    console.error('❌ VITE_ACCESS_CODE environment variable is missing!');
-    console.error('📋 For development: Check your .env.local file');
-    console.error('📋 For production: Set VITE_ACCESS_CODE in your hosting environment');
-    console.error('🔧 Example: VITE_ACCESS_CODE=YourSecureCode2024!');
-    
-    throw new Error(
-      'VITE_ACCESS_CODE environment variable is required. ' +
-      'Please set this in your environment configuration.'
-    );
-  }
-  
-  // Parse optional numeric values with defaults
-  const sessionTimeout = parseInt(import.meta.env.VITE_SESSION_TIMEOUT || '3600000');
-  const maxLoginAttempts = parseInt(import.meta.env.VITE_MAX_LOGIN_ATTEMPTS || '5');
-  
   // Parse boolean values
   const debugMode = import.meta.env.VITE_DEBUG_MODE === 'true';
   
   // Parse log level with validation
-  const logLevel = (['debug', 'info', 'warn', 'error'].includes(import.meta.env.VITE_LOG_LEVEL)) 
+  const logLevel = (['debug', 'info', 'warn', 'error'].includes(import.meta.env.VITE_LOG_LEVEL || '')) 
     ? import.meta.env.VITE_LOG_LEVEL as 'debug' | 'info' | 'warn' | 'error'
     : 'info';
   
-  // Validate numeric ranges
-  if (sessionTimeout < 60000) { // Minimum 1 minute
-    console.warn('Session timeout is very low (< 1 minute). Using default.');
-  }
-  
-  if (maxLoginAttempts < 1 || maxLoginAttempts > 10) {
-    console.warn('Max login attempts should be between 1-10. Using default.');
-  }
-  
   const config: EnvConfig = {
-    accessCode,
-    sessionTimeout: Math.max(sessionTimeout, 60000), // Ensure minimum 1 minute
-    maxLoginAttempts: Math.max(1, Math.min(maxLoginAttempts, 10)), // Clamp between 1-10
     debugMode,
     logLevel,
     
@@ -86,7 +50,6 @@ function validateEnv(): EnvConfig {
   if (debugMode) {
     console.log('Environment configuration loaded:', {
       ...config,
-      accessCode: config.accessCode ? '********' : 'NOT_SET',
       stockApi: config.stockApi?.key ? { ...config.stockApi, key: '********' } : config.stockApi,
       currencyApi: config.currencyApi?.key ? { ...config.currencyApi, key: '********' } : config.currencyApi,
     });

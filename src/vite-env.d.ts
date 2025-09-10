@@ -1,9 +1,6 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_ACCESS_CODE?: string
-  readonly VITE_SESSION_TIMEOUT?: string
-  readonly VITE_MAX_LOGIN_ATTEMPTS?: string
   readonly VITE_STORAGE_ENCRYPTION_KEY?: string
   readonly VITE_DEBUG_MODE?: string
   readonly VITE_LOG_LEVEL?: string
@@ -15,6 +12,9 @@ interface ImportMetaEnv {
   readonly VITE_ENFORCE_HTTPS?: string
   readonly VITE_ENABLE_HSTS?: string
   readonly VITE_ENABLE_CSP?: string
+  // Clerk Authentication
+  readonly VITE_CLERK_PUBLISHABLE_KEY?: string
+  readonly CLERK_SECRET_KEY?: string
 }
 
 interface ImportMeta {

@@ -815,14 +815,26 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         safelyUpdateState(prevState => {
           console.log('📈 Previous stocks:', prevState.stocks.length);
           
-          // Intelligently merge API data with local data
-          const mergedStocks = prevState.stocks.map(localStock => {
-            // Find corresponding API stock
-            const apiStock = data.stocks.find((s: any) => s.symbol === localStock.symbol);
+          // Start with API stocks as the authoritative source
+          const mergedStocks: any[] = [];
+          
+          // Process each API stock and merge with local data if available
+          data.stocks.forEach((apiStock: any) => {
+            // Find corresponding local stock
+            const localStock = prevState.stocks.find(s => s.symbol === apiStock.symbol);
             
-            if (!apiStock) {
-              // Keep local stock if not found in API
-              return localStock;
+            if (!localStock) {
+              // New stock from API - add it
+              console.log(`📊 Adding new stock from API: ${apiStock.symbol}`);
+              mergedStocks.push({
+                ...apiStock,
+                lastUpdated: new Date(apiStock.lastUpdated),
+                priceHistory: apiStock.priceHistory.map((point: any) => ({
+                  ...point,
+                  timestamp: new Date(point.timestamp)
+                }))
+              });
+              return;
             }
             
             // Convert API timestamps
@@ -859,37 +871,40 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               }
             }
             
-            // Return merged stock data
-            return {
+            // Add merged stock data
+            mergedStocks.push({
               ...localStock,
               currentPrice: apiStock.currentPrice,
               previousPrice: apiStock.previousPrice,
               percentageChange: apiStock.percentageChange,
               lastUpdated: new Date(apiStock.lastUpdated),
               priceHistory: finalPriceHistory
-            };
+            });
           });
           
-          // Add any new stocks from API that don't exist locally
-          data.stocks.forEach((apiStock: any) => {
-            if (!mergedStocks.find(s => s.symbol === apiStock.symbol)) {
-              console.log(`📊 Adding new stock from API: ${apiStock.symbol}`);
-              mergedStocks.push({
-                ...apiStock,
-                lastUpdated: new Date(apiStock.lastUpdated),
-                priceHistory: apiStock.priceHistory.map((point: any) => ({
-                  ...point,
-                  timestamp: new Date(point.timestamp)
-                }))
-              });
-            }
-          });
+          // Check for removed stocks
+          const removedStocks = prevState.stocks.filter(localStock => 
+            !data.stocks.find((apiStock: any) => apiStock.symbol === localStock.symbol)
+          );
+          
+          if (removedStocks.length > 0) {
+            console.log(`🗑️ Stocks removed from API:`, removedStocks.map(s => s.symbol).join(', '));
+          }
+          
+          // Check if the currently selected stock was removed
+          let newSelectedStock = prevState.selectedStock;
+          if (newSelectedStock && removedStocks.find(s => s.symbol === newSelectedStock)) {
+            // Selected stock was removed, select the first available stock or null
+            newSelectedStock = mergedStocks.length > 0 ? mergedStocks[0].symbol : null;
+            console.log(`📌 Selected stock was removed, switching to: ${newSelectedStock || 'none'}`);
+          }
           
           console.log('📈 Merged stocks:', mergedStocks.length);
           
           return {
             ...prevState,
-            stocks: mergedStocks
+            stocks: mergedStocks,
+            selectedStock: newSelectedStock
           };
         });
         console.log('✅ Intelligent merge completed successfully');

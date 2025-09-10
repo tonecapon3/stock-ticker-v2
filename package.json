@@ -14,13 +14,20 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "server": "node server.js",
+    "server:clerk": "node server-clerk.cjs",
     "server:managed": "node server-manager.js",
     "server:production": "NODE_ENV=production node server.js",
+    "server:production:clerk": "NODE_ENV=production node server-clerk.cjs",
     "server:production:managed": "NODE_ENV=production node server-manager.js",
     "dev:full": "concurrently \"npm run server:managed\" \"npm run dev\"",
+    "dev:clerk": "concurrently \"npm run server:clerk\" \"npm run dev\"",
     "validate:production": "node scripts/validate-production.js"
   },
   "dependencies": {
+    "@clerk/backend": "^2.13.0",
+    "@clerk/clerk-react": "^5.46.2",
+    "@clerk/express": "^1.7.30",
+    "@clerk/themes": "^2.4.18",
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
     "bcryptjs": "^3.0.2",
@@ -28,20 +35,20 @@
     "concurrently": "^9.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
-    "express": "^5.1.0",
+    "express": "4.17.1",
     "jsonwebtoken": "^9.0.2",
     "npm": "^11.2.0",
     "react": "^18",
     "react-chartjs-2": "^5.3.0",
     "react-dom": "^18",
-    "react-router-dom": "^7.7.1"
+    "react-router-dom": "^6.26.1"
   },
   "engines": {
     "node": ">=20.19.0",
     "npm": ">=10.0.0"
   },
   "overrides": {
-    "glob": "^10.4.5"
+    "path-to-regexp": "3.2.0"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "^6.1.5",
