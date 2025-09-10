@@ -42,25 +42,35 @@ const RemoteControlPanelClerk: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
         <div className="max-w-md w-full text-center">
           <div className="mb-8">
-            <div className="text-6xl mb-4">🏭</div>
-            <h1 className="text-3xl font-bold text-white mb-4">Production Mode</h1>
+            <div className="text-6xl mb-4">🏥</div>
+            <h1 className="text-3xl font-bold text-white mb-4">Remote Control Unavailable</h1>
             <p className="text-gray-400 mb-6">
-              The Remote Control Panel is not available in production environment.
+              The Remote Control Panel requires an API server connection, which is not configured in this environment.
             </p>
           </div>
           
           <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 mb-6">
-            <h2 className="text-lg font-semibold text-white mb-3">ℹ️ Information</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">ℹ️ Environment Information</h2>
             <div className="text-sm text-gray-300 space-y-2">
-              <p>• The application is running in local-only mode</p>
-              <p>• API server connectivity is disabled</p>
-              <p>• Stock data updates are handled locally</p>
-              <p>• All remote control features are unavailable</p>
+              <p>• This deployment runs in frontend-only mode</p>
+              <p>• No backend API server is available</p>
+              <p>• Stock data updates are simulated locally</p>
+              <p>• Remote control features require a separate backend deployment</p>
             </div>
           </div>
           
-          <div className="text-xs text-gray-500">
-            To enable remote controls, configure VITE_API_BASE_URL environment variable.
+          <div className="space-y-4">
+            <a
+              href="/"
+              className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium"
+            >
+              📈 View Stock Ticker
+            </a>
+            
+            <div className="text-xs text-gray-500">
+              <p>For development: Set VITE_API_BASE_URL environment variable</p>
+              <p>For production: Deploy the API server component separately</p>
+            </div>
           </div>
         </div>
       </div>
@@ -397,7 +407,7 @@ const RemoteControlPanelClerk: React.FC = () => {
 
   // Fetch data on component mount and set up polling
   useEffect(() => {
-    if (isSignedIn) {
+    if (isSignedIn && shouldUseApiServer()) {
       setState(prev => ({ ...prev, isLoading: true }));
       
       // Initial data fetch
