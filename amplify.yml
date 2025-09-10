@@ -29,7 +29,7 @@ frontend:
         - nvm use 20 || echo "NVM use failed, continuing with current version"
         - echo "Node.js after upgrade:" && node -v && npm -v
         - npm install -g npm@latest || echo "npm upgrade failed"
-        - npm ci
+        - npm ci --include=dev
     build:
       commands:
         - echo "Building for production..."
