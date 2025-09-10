@@ -423,25 +423,62 @@ const RemoteControlPanelClerk: React.FC = () => {
     setEditPrice('');
   };
 
+  // Verify authentication with server
+  const verifyAuthentication = async () => {
+    try {
+      console.log('🔐 Verifying authentication with API server...');
+      const response = await apiCall('/auth');
+      const data = await response.json();
+      
+      if (response.ok && data.success) {
+        console.log('✅ Authentication verified:', data.user);
+        setState(prev => ({
+          ...prev,
+          connectionStatus: 'connected',
+          lastError: null
+        }));
+        return true;
+      } else {
+        console.error('❌ Authentication failed:', data);
+        setState(prev => ({
+          ...prev,
+          lastError: data.error || 'Authentication verification failed',
+          connectionStatus: 'error'
+        }));
+        return false;
+      }
+    } catch (error) {
+      console.error('❌ Auth verification error:', error);
+      return false;
+    }
+  };
+
   // Fetch data on component mount and set up polling
   useEffect(() => {
     if (isSignedIn && shouldUseApiServer()) {
       setState(prev => ({ ...prev, isLoading: true }));
       
-      // Initial data fetch
-      Promise.all([
-        fetchStocks(),
-        fetchControls()
-      ]).finally(() => {
-        setState(prev => ({ ...prev, isLoading: false }));
+      // First verify authentication, then fetch data
+      verifyAuthentication().then(authSuccess => {
+        if (authSuccess) {
+          Promise.all([
+            fetchStocks(),
+            fetchControls()
+          ]).finally(() => {
+            setState(prev => ({ ...prev, isLoading: false }));
+          });
+
+          // Set up polling interval
+          const interval = setInterval(() => {
+            fetchStocks();
+            fetchControls();
+          }, 5000);
+
+          return () => clearInterval(interval);
+        } else {
+          setState(prev => ({ ...prev, isLoading: false }));
+        }
       });
-
-      const interval = setInterval(() => {
-        fetchStocks();
-        fetchControls();
-      }, 5000);
-
-      return () => clearInterval(interval);
     }
   }, [isSignedIn]);
 

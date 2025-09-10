@@ -473,6 +473,31 @@ app.put('/api/remote/controls', requireAuthWithFallback, enrichUserInfo, (req, r
   }
 });
 
+// Authentication verification endpoint for Clerk tokens
+app.get('/api/remote/auth', requireAuthWithFallback, enrichUserInfo, (req, res) => {
+  if (req.isUnauthenticated) {
+    return res.status(401).json({ 
+      success: false,
+      error: 'Authentication required',
+      message: 'Valid Clerk token required'
+    });
+  }
+
+  res.json({
+    success: true,
+    authenticated: true,
+    user: {
+      id: req.user.id,
+      username: req.user.username,
+      email: req.user.email,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      role: req.user.role
+    },
+    message: 'Authentication successful'
+  });
+});
+
 // User info endpoint
 app.get('/api/remote/user', requireAuthWithFallback, enrichUserInfo, (req, res) => {
   if (req.isUnauthenticated) {
@@ -579,6 +604,7 @@ app.listen(PORT, () => {
   console.log('');
   console.log('📋 Available Endpoints:');
   console.log('  GET  /api/health                    - Health check');
+  console.log('  GET  /api/remote/auth               - Verify Clerk token (auth)');
   console.log('  GET  /api/remote/stocks             - Get all stocks (public)');
   console.log('  POST /api/remote/stocks             - Add new stock (auth)');
   console.log('  PUT  /api/remote/stocks/:symbol     - Update stock price (auth)');
