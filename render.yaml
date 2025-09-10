@@ -4,7 +4,7 @@ services:
     env: node
     plan: free
     buildCommand: npm ci
-    startCommand: node server.js
+    startCommand: node server-clerk.cjs
     envVars:
       - key: NODE_ENV
         value: production
@@ -21,6 +21,10 @@ services:
       - key: REMOTE_CONTROLLER_USERNAME
         value: controller
       - key: REMOTE_CONTROLLER_PASSWORD_HASH
+        sync: false
+      - key: CLERK_SECRET_KEY
+        sync: false
+      - key: NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY
         sync: false
     healthCheckPath: /status/health
     disk:
