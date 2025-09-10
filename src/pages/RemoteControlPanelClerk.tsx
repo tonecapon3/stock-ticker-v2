@@ -3,9 +3,6 @@ import { useAuth } from '../hooks/useAuth';
 import { shouldUseApiServer, getApiBaseUrl } from '../lib/config';
 import AuthLoading from '../components/auth/AuthLoading';
 
-// API Base URL
-const API_BASE = shouldUseApiServer() ? `${getApiBaseUrl()}/api/remote` : '';
-
 interface Stock {
   symbol: string;
   name: string;
@@ -33,49 +30,70 @@ interface RemoteState {
   isLoading: boolean;
 }
 
-const RemoteControlPanelClerk: React.FC = () => {
-  const { isLoaded, isSignedIn, getAuthToken, userInfo, signOut } = useAuth();
-  
-  // Check if API server is available
-  if (!shouldUseApiServer()) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
-        <div className="max-w-md w-full text-center">
-          <div className="mb-8">
-            <div className="text-6xl mb-4">🏥</div>
-            <h1 className="text-3xl font-bold text-white mb-4">Remote Control Unavailable</h1>
-            <p className="text-gray-400 mb-6">
-              The Remote Control Panel requires an API server connection, which is not configured in this environment.
-            </p>
+// Production-only component when API server is not available
+const ProductionUnavailableMessage: React.FC = () => {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
+      <div className="max-w-md w-full text-center">
+        <div className="mb-8">
+          <div className="text-6xl mb-4">🏥</div>
+          <h1 className="text-3xl font-bold text-white mb-4">Remote Control Unavailable</h1>
+          <p className="text-gray-400 mb-6">
+            The Remote Control Panel requires an API server connection, which is not configured in this environment.
+          </p>
+        </div>
+        
+        <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 mb-6">
+          <h2 className="text-lg font-semibold text-white mb-3">ℹ️ Environment Information</h2>
+          <div className="text-sm text-gray-300 space-y-2">
+            <p>• This deployment runs in frontend-only mode</p>
+            <p>• No backend API server is available</p>
+            <p>• Stock data updates are simulated locally</p>
+            <p>• Remote control features require a separate backend deployment</p>
           </div>
+        </div>
+        
+        <div className="space-y-4">
+          <a
+            href="/"
+            className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium"
+          >
+            📈 View Stock Ticker
+          </a>
           
-          <div className="bg-gray-800 p-6 rounded-lg border border-gray-700 mb-6">
-            <h2 className="text-lg font-semibold text-white mb-3">ℹ️ Environment Information</h2>
-            <div className="text-sm text-gray-300 space-y-2">
-              <p>• This deployment runs in frontend-only mode</p>
-              <p>• No backend API server is available</p>
-              <p>• Stock data updates are simulated locally</p>
-              <p>• Remote control features require a separate backend deployment</p>
-            </div>
-          </div>
-          
-          <div className="space-y-4">
-            <a
-              href="/"
-              className="inline-flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors font-medium"
-            >
-              📈 View Stock Ticker
-            </a>
-            
-            <div className="text-xs text-gray-500">
-              <p>For development: Set VITE_API_BASE_URL environment variable</p>
-              <p>For production: Deploy the API server component separately</p>
-            </div>
+          <div className="text-xs text-gray-500">
+            <p>For development: Set VITE_API_BASE_URL environment variable</p>
+            <p>For production: Deploy the API server component separately</p>
           </div>
         </div>
       </div>
-    );
+    </div>
+  );
+};
+
+const RemoteControlPanelClerk: React.FC = () => {
+  // Debug logging for production troubleshooting
+  console.log('🔍 RemoteControlPanel Debug:', {
+    shouldUseApiServer: shouldUseApiServer(),
+    apiBaseUrl: getApiBaseUrl(),
+    hostname: window.location.hostname,
+    isDev: import.meta.env.DEV,
+    viteApiBaseUrl: import.meta.env.VITE_API_BASE_URL
+  });
+  
+  // First check: If no API server is configured, show unavailable message immediately
+  if (!shouldUseApiServer()) {
+    console.log('🏥 No API server configured, showing unavailable message');
+    return <ProductionUnavailableMessage />;
   }
+  
+  console.log('🚀 API server available, initializing remote control panel');
+  
+  // Only initialize auth hooks if API server is available
+  const { isLoaded, isSignedIn, getAuthToken, userInfo, signOut } = useAuth();
+  
+  // API Base URL - only set if we reach this point (API server available)
+  const API_BASE = `${getApiBaseUrl()}/api/remote`;
 
   const [state, setState] = useState<RemoteState>({
     stocks: [],
