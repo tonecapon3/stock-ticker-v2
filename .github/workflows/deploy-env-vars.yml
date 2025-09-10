@@ -1,0 +1,52 @@
+name: Deploy Environment Variables to Amplify
+
+on:
+  push:
+    branches: [ main ]
+    paths: 
+      - 'amplify.yml'
+      - '.github/workflows/deploy-env-vars.yml'
+  workflow_dispatch:
+
+jobs:
+  deploy-env-vars:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: us-east-1
+        
+    - name: Update Amplify App Environment Variables
+      run: |
+        aws amplify update-app \
+          --app-id ${{ secrets.AMPLIFY_APP_ID }} \
+          --environment-variables \
+            VITE_CLERK_PUBLISHABLE_KEY=${{ secrets.VITE_CLERK_PUBLISHABLE_KEY }},\
+            VITE_API_BASE_URL=${{ secrets.VITE_API_BASE_URL }},\
+            VITE_DEBUG_MODE=false,\
+            VITE_LOG_LEVEL=warn,\
+            NODE_ENV=production
+            
+    - name: Update Main Branch Environment Variables
+      run: |
+        aws amplify update-branch \
+          --app-id ${{ secrets.AMPLIFY_APP_ID }} \
+          --branch-name main \
+          --environment-variables \
+            VITE_ENFORCE_HTTPS=true,\
+            VITE_ENABLE_HSTS=true,\
+            VITE_ENABLE_CSP=true
+            
+    - name: Trigger Rebuild
+      run: |
+        aws amplify start-job \
+          --app-id ${{ secrets.AMPLIFY_APP_ID }} \
+          --branch-name main \
+          --job-type RELEASE

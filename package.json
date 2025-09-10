@@ -21,9 +21,14 @@
     "server:production:managed": "NODE_ENV=production node server-manager.js",
     "dev:full": "concurrently \"npm run server:managed\" \"npm run dev\"",
     "dev:clerk": "concurrently \"npm run server:clerk\" \"npm run dev\"",
-    "validate:production": "node scripts/validate-production.js"
+    "validate:production": "node scripts/validate-production.js",
+    "validate:amplify": "node scripts/validate-amplify-config.js",
+    "test:aws": "node scripts/aws-auth-helper.js",
+    "deploy:env": "npm run validate:amplify && node scripts/deploy-env-vars.js",
+    "amplify:env": "npm run deploy:env"
   },
   "dependencies": {
+    "@aws-sdk/credential-providers": "^3.883.0",
     "@clerk/backend": "^2.13.0",
     "@clerk/clerk-react": "^5.46.2",
     "@clerk/express": "^1.7.30",
@@ -51,6 +56,7 @@
     "path-to-regexp": "3.2.0"
   },
   "devDependencies": {
+    "@aws-sdk/client-amplify": "^3.883.0",
     "@testing-library/jest-dom": "^6.1.5",
     "@testing-library/react": "^14.1.2",
     "@testing-library/user-event": "^14.5.1",
