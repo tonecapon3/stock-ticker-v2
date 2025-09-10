@@ -1,12 +1,16 @@
 name: Deploy Environment Variables to Amplify
 
+# DISABLED: Use npm run deploy:env locally instead
+# Re-enable by uncommenting the 'on:' section below
 on:
-  push:
-    branches: [ main ]
-    paths: 
-      - 'amplify.yml'
-      - '.github/workflows/deploy-env-vars.yml'
   workflow_dispatch:
+# on:
+#   push:
+#     branches: [ main ]
+#     paths: 
+#       - 'amplify.yml'
+#       - '.github/workflows/deploy-env-vars.yml'
+#   workflow_dispatch:
 
 jobs:
   deploy-env-vars:
