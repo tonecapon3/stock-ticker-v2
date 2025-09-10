@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "vite",
-    "build": "echo 'Skipping build for API server deployment'",
+    "build": "vite build",
     "heroku-postbuild": "echo 'Skipping postbuild for API server deployment'",
     "build:production": "vite build --mode production",
     "preview": "vite preview",

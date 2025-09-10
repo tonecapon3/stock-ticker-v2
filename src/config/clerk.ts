@@ -28,6 +28,16 @@ if (isPlaceholderKey) {
 // Clerk configuration object
 export const clerkConfig = {
   publishableKey,
+  // Add afterSignOutUrl to handle sign-out redirects properly
+  afterSignOutUrl: '/sign-in',
+  // Add error handling options
+  onSignOutFailure: (error: Error) => {
+    console.error('Clerk sign-out failed:', error);
+    // Fallback: redirect to sign-in page
+    if (typeof window !== 'undefined') {
+      window.location.href = '/sign-in';
+    }
+  },
   appearance: {
     // You can customize the appearance here
     // See: https://clerk.com/docs/customization/overview

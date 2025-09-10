@@ -17,7 +17,7 @@ export const useAuth = () => {
   const { user } = useUser();
   const clerk = useClerk();
 
-  // Sign out function with optional callback
+  // Sign out function with optional callback and better error handling
   const signOut = useCallback(
     async (callback?: () => void) => {
       try {
@@ -27,6 +27,28 @@ export const useAuth = () => {
         }
       } catch (error) {
         console.error('Error during sign out:', error);
+        
+        // Try alternative sign-out method if the first one fails
+        try {
+          // Force clear session locally if network request fails
+          localStorage.removeItem('__clerk_client_jwt');
+          sessionStorage.clear();
+          
+          // Redirect to sign-in page manually
+          if (typeof window !== 'undefined') {
+            window.location.href = '/sign-in';
+          }
+        } catch (fallbackError) {
+          console.error('Fallback sign-out also failed:', fallbackError);
+          // As a last resort, reload the page
+          if (typeof window !== 'undefined') {
+            window.location.reload();
+          }
+        }
+        
+        if (callback) {
+          callback();
+        }
       }
     },
     [clerk]
