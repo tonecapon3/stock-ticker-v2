@@ -729,6 +729,7 @@ const RemoteControlPanelClerk: React.FC = () => {
                       }}
                       disabled={!bulkPercentage || isNaN(parseFloat(bulkPercentage))}
                       className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md text-sm font-medium transition-colors"
+                      title="Apply the specified percentage change to all stock prices (positive or negative)"
                     >
                       Apply Change
                     </button>
@@ -739,12 +740,18 @@ const RemoteControlPanelClerk: React.FC = () => {
                   <button
                     onClick={() => bulkUpdateStocks('random')}
                     className="py-2 px-3 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm font-medium transition-colors"
+                    title="Apply random market fluctuations to all stocks (±5% variation)"
                   >
                     Random Fluctuation
                   </button>
                   <button
-                    onClick={() => bulkUpdateStocks('reset')}
+                    onClick={() => {
+                      if (confirm(`Are you sure you want to reset all ${state.stocks.length} stocks to their initial prices? This cannot be undone.`)) {
+                        bulkUpdateStocks('reset');
+                      }
+                    }}
                     className="py-2 px-3 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm font-medium transition-colors"
+                    title="Reset all stocks to their original prices when first added to the system"
                   >
                     Reset to Initial
                   </button>
@@ -754,12 +761,14 @@ const RemoteControlPanelClerk: React.FC = () => {
                   <button
                     onClick={() => bulkUpdateStocks('market_crash')}
                     className="py-2 px-3 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm font-medium transition-colors"
+                    title="Decrease all stock prices by 20% to simulate a market crash"
                   >
                     📉 Market Crash (-20%)
                   </button>
                   <button
                     onClick={() => bulkUpdateStocks('market_boom')}
                     className="py-2 px-3 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium transition-colors"
+                    title="Increase all stock prices by 20% to simulate a market boom"
                   >
                     📈 Market Boom (+20%)
                   </button>
@@ -846,9 +855,19 @@ const RemoteControlPanelClerk: React.FC = () => {
                   </button>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Update Speed: {(state.controls.updateIntervalMs / 1000).toFixed(1)}s
-                    </label>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-medium text-gray-300">
+                        Update Speed:
+                      </label>
+                      <div className="flex items-center space-x-2">
+                        <div className="bg-blue-900 px-3 py-1 rounded-full border border-blue-600">
+                          <span className="text-blue-200 text-xs font-medium">Current Speed</span>
+                          <span className="text-white text-sm font-bold ml-2">
+                            {(state.controls.updateIntervalMs / 1000).toFixed(1)}s
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                     <input
                       type="range"
                       min="100"
