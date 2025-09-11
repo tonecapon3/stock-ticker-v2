@@ -42,3 +42,8 @@ frontend:
     paths:
       - node_modules/**/*
       - .next/cache/**/*
+# SPA redirect rules for client-side routing
+redirects:
+  - source: '/<*>'
+    target: '/index.html'
+    status: 200
