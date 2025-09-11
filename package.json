@@ -21,7 +21,7 @@
     "server:production:managed": "NODE_ENV=production node server-manager.js",
     "dev:full": "concurrently \"npm run server:managed\" \"npm run dev\"",
     "dev:clerk": "concurrently \"npm run server:clerk\" \"npm run dev\"",
-    "validate:production": "node scripts/validate-production.js",
+    "validate:production": "node validate-production.js",
     "validate:amplify": "node scripts/validate-amplify-config.js",
     "test:aws": "node scripts/aws-auth-helper.js",
     "deploy:env": "npm run validate:amplify && node scripts/deploy-env-vars.js",
