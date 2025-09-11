@@ -6,8 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "dev": "vite",
-    "build": "vite build",
+    "build": "if command -v vite >/dev/null 2>&1; then vite build; else echo 'Vite not available, skipping frontend build (API server deployment)'; fi",
     "heroku-postbuild": "echo 'Skipping postbuild for API server deployment'",
+    "render-build": "echo 'Installing backend dependencies for API server...' && npm ci && echo 'API server dependencies installed successfully'",
     "build:production": "vite build --mode production",
     "preview": "vite preview",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",

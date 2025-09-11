@@ -1,0 +1,26 @@
+{
+  "name": "stock-ticker-api",
+  "version": "0.1.0",
+  "description": "Stock Ticker API Server for Render deployment",
+  "type": "module",
+  "main": "server-clerk.cjs",
+  "scripts": {
+    "start": "node server-clerk.cjs",
+    "build": "echo 'API server - no build required'",
+    "postinstall": "echo 'Backend dependencies installed successfully'"
+  },
+  "dependencies": {
+    "@clerk/backend": "^2.13.0",
+    "@clerk/express": "^1.7.30",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "4.17.1",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  }
+}

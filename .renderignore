@@ -1,0 +1,37 @@
+# Render ignore file - Backend API deployment
+# Exclude frontend build artifacts and development files
+
+# Frontend build output
+dist/
+build/
+
+# Development tools
+vite.config.ts
+vite.config.js
+
+# Frontend source (not needed for API server)
+src/
+public/
+index.html
+
+# Development configs
+.env.local
+.env.development
+
+# Testing
+__tests__/
+*.test.js
+*.test.ts
+*.spec.js
+*.spec.ts
+
+# Documentation (optional, can include if needed)
+# *.md
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
