@@ -24,7 +24,7 @@ export const getApiBaseUrl = (): string => {
   if (isLocalDevelopment) {
     // Development mode with no API URL configured: use local server
     console.log('🏠 Development mode: using local API server');
-    return 'http://localhost:3002';
+    return 'http://localhost:3003';
   } else {
     // No API server configured
     console.warn('⚠️ API server not configured. Using local-only mode.');

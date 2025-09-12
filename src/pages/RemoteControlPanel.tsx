@@ -375,6 +375,61 @@ const RemoteControlPanel: React.FC = () => {
     }
   };
 
+  // Dedicated pause/resume functions
+  const pauseSystem = async () => {
+    try {
+      const response = await apiCall('/controls/pause', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        await fetchControls();
+        return true;
+      } else {
+        const data = await response.json();
+        setState(prev => ({ ...prev, lastError: data.error || 'Failed to pause system' }));
+        return false;
+      }
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        lastError: error instanceof Error ? error.message : 'Failed to pause system',
+      }));
+      return false;
+    }
+  };
+
+  const resumeSystem = async () => {
+    try {
+      const response = await apiCall('/controls/resume', {
+        method: 'POST',
+      });
+
+      if (response.ok) {
+        await fetchControls();
+        return true;
+      } else {
+        const data = await response.json();
+        setState(prev => ({ ...prev, lastError: data.error || 'Failed to resume system' }));
+        return false;
+      }
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        lastError: error instanceof Error ? error.message : 'Failed to resume system',
+      }));
+      return false;
+    }
+  };
+
+  const togglePause = async () => {
+    if (state.controls?.isPaused) {
+      return await resumeSystem();
+    } else {
+      return await pauseSystem();
+    }
+  };
+
 
   const restartServer = async () => {
     if (!confirm('Are you sure you want to restart the API server? This will disconnect all users temporarily.')) return;
@@ -934,14 +989,14 @@ const RemoteControlPanel: React.FC = () => {
                 <h3 className="text-lg font-semibold mb-4">⚡ Quick Actions</h3>
                 <div className="space-y-3">
                   <button
-                    onClick={() => updateControls({ isPaused: !state.controls!.isPaused })}
+                    onClick={togglePause}
                     className={`w-full py-2 px-4 rounded-md font-medium transition-colors ${
                       state.controls.isPaused
                         ? 'bg-green-600 hover:bg-green-700 text-white'
                         : 'bg-yellow-600 hover:bg-yellow-700 text-white'
                     }`}
                   >
-                    {state.controls.isPaused ? 'Resume System' : 'Pause System'}
+                    {state.controls.isPaused ? '▶️ Resume System' : '⏸️ Pause System'}
                   </button>
 
                   <div>

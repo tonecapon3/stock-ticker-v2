@@ -1,7 +1,16 @@
+/**
+ * Hybrid Remote Control Panel
+ * 
+ * This component provides a unified remote control panel that works with both
+ * JWT and Clerk authentication methods seamlessly.
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../hooks/useAuth';
+import { useHybridAuth } from '../hooks/auth/useHybridAuth';
 import { shouldUseApiServer, getApiBaseUrl } from '../lib/config';
-import AuthLoading from '../components/auth/AuthLoading';
+import { HybridAuthGuard } from '../components/auth/hybrid/HybridAuthGuard';
+import { userUtils, apiUtils } from '../auth/utils';
+import { AuthMethod } from '../auth/types';
 
 interface Stock {
   symbol: string;
@@ -71,9 +80,9 @@ const ProductionUnavailableMessage: React.FC = () => {
   );
 };
 
-const RemoteControlPanelClerk: React.FC = () => {
+const RemoteControlPanelHybrid: React.FC = () => {
   // Debug logging for production troubleshooting
-  console.log('🔍 RemoteControlPanel Debug:', {
+  console.log('🔍 RemoteControlPanelHybrid Debug:', {
     shouldUseApiServer: shouldUseApiServer(),
     apiBaseUrl: getApiBaseUrl(),
     hostname: window.location.hostname,
@@ -87,10 +96,17 @@ const RemoteControlPanelClerk: React.FC = () => {
     return <ProductionUnavailableMessage />;
   }
   
-  console.log('🚀 API server available, initializing remote control panel');
-  
-  // Only initialize auth hooks if API server is available
-  const { isLoaded, isSignedIn, getAuthToken, userInfo, signOut } = useAuth();
+  console.log('🚀 API server available, initializing hybrid remote control panel');
+
+  return (
+    <HybridAuthGuard loadingMessage="Initializing hybrid authentication...">
+      <RemoteControlContent />
+    </HybridAuthGuard>
+  );
+};
+
+const RemoteControlContent: React.FC = () => {
+  const { user, authMethod, getToken, signOut, hasRole, isAdmin } = useHybridAuth();
   
   // API Base URL - only set if we reach this point (API server available)
   const API_BASE = `${getApiBaseUrl()}/api/remote`;
@@ -109,47 +125,21 @@ const RemoteControlPanelClerk: React.FC = () => {
   const [addStockForm, setAddStockForm] = useState({ symbol: '', name: '', price: '' });
   const [bulkPercentage, setBulkPercentage] = useState<string>('');
 
-  // Show loading while authentication is initializing
-  if (!isLoaded) {
-    return <AuthLoading message="Loading authentication..." />;
-  }
-
-  // Redirect to sign-in if not authenticated
-  if (!isSignedIn) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-900 px-4">
-        <div className="max-w-md w-full text-center">
-          <div className="mb-8">
-            <div className="text-6xl mb-4">🔒</div>
-            <h1 className="text-3xl font-bold text-white mb-4">Authentication Required</h1>
-            <p className="text-gray-400 mb-6">
-              Please sign in to access the Remote Control Panel.
-            </p>
-          </div>
-          <a
-            href="/sign-in"
-            className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-          >
-            Sign In
-          </a>
-        </div>
-      </div>
-    );
-  }
-
-  // API call helper with Clerk token
+  /**
+   * API call helper with hybrid token support
+   */
   const apiCall = useCallback(async (endpoint: string, options: RequestInit = {}) => {
     try {
-      const token = await getAuthToken();
+      const token = await getToken();
       
-      const response = await fetch(`${API_BASE}${endpoint}`, {
+      const response = await apiUtils.authenticatedFetch(endpoint, {
         ...options,
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
           'Content-Type': 'application/json',
           ...options.headers,
         },
-      });
+      }, token, authMethod || undefined);
 
       if (response.status === 401) {
         setState(prev => ({
@@ -170,7 +160,7 @@ const RemoteControlPanelClerk: React.FC = () => {
       }));
       throw error;
     }
-  }, [getAuthToken, signOut]);
+  }, [getToken, authMethod, signOut]);
 
   // Fetch stocks
   const fetchStocks = async () => {
@@ -223,7 +213,7 @@ const RemoteControlPanelClerk: React.FC = () => {
   // Update stock price
   const updateStockPrice = async (symbol: string, price: number) => {
     try {
-      const response = await apiCall(`/stocks/${symbol}`, {
+      const response = await apiCall(`/stocks/${symbol}/price`, {
         method: 'PUT',
         body: JSON.stringify({ price }),
       });
@@ -479,12 +469,12 @@ const RemoteControlPanelClerk: React.FC = () => {
   // Verify authentication with server
   const verifyAuthentication = async () => {
     try {
-      console.log('🔐 Verifying authentication with API server...');
+      console.log('🔐 Verifying hybrid authentication with API server...');
       const response = await apiCall('/auth');
       const data = await response.json();
       
       if (response.ok && data.success) {
-        console.log('✅ Authentication verified:', data.user);
+        console.log('✅ Hybrid authentication verified:', data.user, 'Method:', data.authMethod);
         setState(prev => ({
           ...prev,
           connectionStatus: 'connected',
@@ -492,7 +482,7 @@ const RemoteControlPanelClerk: React.FC = () => {
         }));
         return true;
       } else {
-        console.error('❌ Authentication failed:', data);
+        console.error('❌ Hybrid authentication failed:', data);
         setState(prev => ({
           ...prev,
           lastError: data.error || 'Authentication verification failed',
@@ -501,14 +491,14 @@ const RemoteControlPanelClerk: React.FC = () => {
         return false;
       }
     } catch (error) {
-      console.error('❌ Auth verification error:', error);
+      console.error('❌ Hybrid auth verification error:', error);
       return false;
     }
   };
 
   // Fetch data on component mount and set up polling
   useEffect(() => {
-    if (isSignedIn && shouldUseApiServer()) {
+    if (user && shouldUseApiServer()) {
       setState(prev => ({ ...prev, isLoading: true }));
       
       // First verify authentication, then fetch data
@@ -533,7 +523,7 @@ const RemoteControlPanelClerk: React.FC = () => {
         }
       });
     }
-  }, [isSignedIn]);
+  }, [user]);
 
   // Clear errors after 5 seconds
   useEffect(() => {
@@ -597,6 +587,9 @@ const RemoteControlPanelClerk: React.FC = () => {
     );
   };
 
+  // Get display name using hybrid auth utilities
+  const displayName = user ? userUtils.getDisplayName(user) : 'Unknown User';
+
   return (
     <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
@@ -604,15 +597,30 @@ const RemoteControlPanelClerk: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold">Remote Control Panel</h1>
+              <h1 className="text-2xl font-bold">Hybrid Remote Control Panel</h1>
               <p className="text-gray-400">Stock Ticker Remote Management</p>
             </div>
             
             <div className="flex items-center space-x-6">
               <ConnectionStatus status={state.connectionStatus} />
+              
+              {/* Auth method indicator */}
+              <div className="flex items-center space-x-2">
+                <span className="text-xs text-gray-400">Auth:</span>
+                <span className={`text-xs px-2 py-1 rounded ${
+                  authMethod === AuthMethod.CLERK 
+                    ? 'bg-blue-900 text-blue-200' 
+                    : authMethod === AuthMethod.JWT
+                    ? 'bg-green-900 text-green-200'
+                    : 'bg-gray-600 text-gray-300'
+                }`}>
+                  {authMethod === AuthMethod.CLERK ? '🛡️ Clerk' : authMethod === AuthMethod.JWT ? '🔑 JWT' : '🔐 Auth'}
+                </span>
+              </div>
+              
               <div className="flex items-center space-x-4">
                 <span className="text-sm">
-                  {userInfo.fullName || userInfo.username} ({userInfo.role})
+                  {displayName} ({user?.role})
                 </span>
                 <button
                   onClick={() => signOut()}
@@ -908,19 +916,9 @@ const RemoteControlPanelClerk: React.FC = () => {
                   </button>
 
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-sm font-medium text-gray-300">
-                        Update Speed:
-                      </label>
-                      <div className="flex items-center space-x-2">
-                        <div className="bg-blue-900 px-3 py-1 rounded-full border border-blue-600">
-                          <span className="text-blue-200 text-xs font-medium">Current Speed</span>
-                          <span className="text-white text-sm font-bold ml-2">
-                            {(state.controls.updateIntervalMs / 1000).toFixed(1)}s
-                          </span>
-                        </div>
-                      </div>
-                    </div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Update Speed: {(state.controls.updateIntervalMs / 1000).toFixed(1)}s
+                    </label>
                     <input
                       type="range"
                       min="100"
@@ -936,23 +934,26 @@ const RemoteControlPanelClerk: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-gray-600">
-                    <div className="bg-orange-900 p-3 rounded-md border border-orange-700 mb-3">
-                      <div className="flex items-start space-x-2">
-                        <span className="text-orange-300">⚠️</span>
-                        <div className="text-xs text-orange-100">
-                          <p className="font-medium mb-1">System Action</p>
-                          <p>API server restart will disconnect all users temporarily.</p>
+                  {/* Server Restart - Admin Only */}
+                  {isAdmin() && (
+                    <div className="pt-3 border-t border-gray-600">
+                      <div className="bg-orange-900 p-3 rounded-md border border-orange-700 mb-3">
+                        <div className="flex items-start space-x-2">
+                          <span className="text-orange-300">⚠️</span>
+                          <div className="text-xs text-orange-100">
+                            <p className="font-medium mb-1">System Action</p>
+                            <p>API server restart will disconnect all users temporarily.</p>
+                          </div>
                         </div>
                       </div>
+                      <button
+                        onClick={restartServer}
+                        className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+                      >
+                        🔄 RESTART API SERVER
+                      </button>
                     </div>
-                    <button
-                      onClick={restartServer}
-                      className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
-                    >
-                      🔄 RESTART API SERVER
-                    </button>
-                  </div>
+                  )}
                 </div>
               </div>
             )}
@@ -991,4 +992,4 @@ const RemoteControlPanelClerk: React.FC = () => {
   );
 };
 
-export default RemoteControlPanelClerk;
+export default RemoteControlPanelHybrid;

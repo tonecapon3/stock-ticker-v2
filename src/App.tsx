@@ -5,8 +5,7 @@ import { TabContent } from './components/TabContent';
 import TickerPage from './pages/TickerPage';
 import ControlsPage from './pages/ControlsPage';
 import HomePage from './pages/HomePage';
-import RemoteControlPanel from './pages/RemoteControlPanel';
-import RemoteControlPanelClerk from './pages/RemoteControlPanelClerk';
+import RemoteControlPanelJWT from './pages/RemoteControlPanelJWT';
 import { useSecurity } from './hooks/useSecurity';
 import SecurityWarning from './components/SecurityWarning';
 
@@ -36,14 +35,10 @@ function App() {
           } 
         />
         
-        {/* Remote Control Panel Route - Protected */}
+        {/* Remote Control Panel Route - JWT Authentication Only */}
         <Route 
           path="/remote" 
-          element={
-            <AuthGuard>
-              <RemoteControlPanelClerk />
-            </AuthGuard>
-          } 
+          element={<RemoteControlPanelJWT />}
         />
         
         {/* Main Application Route - Protected */}

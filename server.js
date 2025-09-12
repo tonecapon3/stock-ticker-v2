@@ -7,15 +7,16 @@ import path from 'path';
 import dotenv from 'dotenv';
 
 // Price history generation utilities
-function generateFakePriceHistory(basePrice, pointsCount = 30, intervalSeconds = 15) {
+function generateFakePriceHistory(basePrice, pointsCount = 30, intervalSeconds = 15, volatilityPercent = 2.0) {
   const priceHistory = [];
   const now = new Date();
   
   for (let i = pointsCount - 1; i >= 0; i--) {
     const timestamp = new Date(now.getTime() - (i * intervalSeconds * 1000));
     
-    // Generate realistic price variation
-    const randomVariation = (Math.random() - 0.5) * 2 * 0.03; // 3% max variation
+    // Generate realistic price variation using the volatility parameter
+    const maxVariation = volatilityPercent / 100; // Convert percentage to decimal
+    const randomVariation = (Math.random() - 0.5) * 2 * maxVariation;
     
     // Apply smoothing with previous point
     let priceVariation = randomVariation;
@@ -42,12 +43,19 @@ function generateRealisticPriceChange(currentPrice, maxChangePercent = 2) {
   const randomFactor = Math.random();
   let changePercent;
   
+  // Scale the change ranges based on the maxChangePercent (volatility)
+  const smallChangeRange = maxChangePercent * 0.25; // 25% of max for small changes
+  const mediumChangeRange = maxChangePercent * 0.75; // 75% of max for medium changes
+  
   if (randomFactor < 0.7) {
-    changePercent = (Math.random() - 0.5) * 1.0; // Small changes
+    // 70% of changes are small
+    changePercent = (Math.random() - 0.5) * smallChangeRange * 2;
   } else if (randomFactor < 0.9) {
-    changePercent = (Math.random() - 0.5) * 3.0; // Medium changes
+    // 20% are medium changes
+    changePercent = (Math.random() - 0.5) * mediumChangeRange * 2;
   } else {
-    changePercent = (Math.random() - 0.5) * maxChangePercent * 2; // Large changes
+    // 10% are large changes (up to max volatility)
+    changePercent = (Math.random() - 0.5) * maxChangePercent * 2;
   }
   
   const newPrice = currentPrice * (1 + changePercent / 100);
@@ -137,6 +145,16 @@ if (process.env.NODE_ENV === 'production') {
   }
 }
 
+// Mock system state
+let systemState = {
+  isPaused: false,
+  updateIntervalMs: 1000, // 1 second for smoother updates
+  selectedCurrency: 'USD',
+  volatility: 2.0, // Default volatility at 2.0%
+  lastUpdated: new Date(),
+  isEmergencyStopped: false
+};
+
 // Mock stock data with rich price history - synchronized with frontend
 const defaultStockData = [
   { symbol: 'BNOX', name: 'Bane&Ox Inc.', basePrice: 185.75 },
@@ -146,7 +164,7 @@ const defaultStockData = [
 
 // Initialize stocks with rich price history
 let stocksData = defaultStockData.map(stock => {
-  const priceHistory = generateFakePriceHistory(stock.basePrice, 30, 15);
+  const priceHistory = generateFakePriceHistory(stock.basePrice, 30, 15, systemState.volatility);
   const mostRecentPrice = priceHistory[priceHistory.length - 1].price;
   
   return {
@@ -160,15 +178,6 @@ let stocksData = defaultStockData.map(stock => {
     priceHistory: priceHistory,
   };
 });
-
-// Mock system state
-let systemState = {
-  isPaused: false,
-  updateIntervalMs: 1000, // 1 second for smoother updates
-  selectedCurrency: 'USD',
-  lastUpdated: new Date(),
-  isEmergencyStopped: false
-};
 
 // Middleware to verify JWT token
 function verifyToken(req, res, next) {
@@ -360,17 +369,21 @@ app.put('/api/remote/stocks/bulk', verifyToken, (req, res) => {
             newPrice = currentPrice * (1 + pct / 100);
             break;
           case 'random':
-            // Random fluctuation between -5% and +5%
-            const randomPct = (Math.random() * 10) - 5;
+          case 'simulate':
+            // Random fluctuation using current volatility setting
+            const maxVariation = systemState.volatility; // Use current volatility
+            const randomPct = (Math.random() - 0.5) * 2 * maxVariation; // -volatility% to +volatility%
             newPrice = currentPrice * (1 + randomPct / 100);
             break;
           case 'reset':
             newPrice = stock.initialPrice;
             break;
           case 'market_crash':
+          case 'bear':
             newPrice = currentPrice * 0.8; // 20% drop
             break;
           case 'market_boom':
+          case 'bull':
             newPrice = currentPrice * 1.2; // 20% increase
             break;
           default:
@@ -633,6 +646,16 @@ app.put('/api/remote/controls', verifyToken, (req, res) => {
       changes.push(`Currency changed from ${oldCurrency} to ${updates.selectedCurrency}`);
     }
 
+    if (updates.volatility !== undefined) {
+      if (typeof updates.volatility !== 'number' || updates.volatility < 0.1 || updates.volatility > 5.0) {
+        return res.status(400).json({ error: 'volatility must be a number between 0.1 and 5.0' });
+      }
+      
+      const oldVolatility = systemState.volatility;
+      systemState.volatility = updates.volatility;
+      changes.push(`Volatility changed from ${oldVolatility}% to ${updates.volatility}%`);
+    }
+
     if (updates.emergencyStop !== undefined) {
       if (typeof updates.emergencyStop !== 'boolean') {
         return res.status(400).json({ error: 'emergencyStop must be a boolean' });
@@ -648,6 +671,9 @@ app.put('/api/remote/controls', verifyToken, (req, res) => {
     }
 
     systemState.lastUpdated = new Date();
+    
+    // Update market simulation with new settings
+    updateMarketSimulation();
 
     res.json({
       success: true,
@@ -659,6 +685,62 @@ app.put('/api/remote/controls', verifyToken, (req, res) => {
   } catch (error) {
     console.error('Error updating controls:', error);
     res.status(500).json({ error: 'Failed to update controls' });
+  }
+});
+
+// Pause/Resume endpoints (simplified, no additional validation required)
+app.post('/api/remote/controls/pause', verifyToken, (req, res) => {
+  try {
+    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const wasPaused = systemState.isPaused;
+    systemState.isPaused = true;
+    systemState.lastUpdated = new Date();
+    
+    // Update market simulation with new settings
+    updateMarketSimulation();
+
+    res.json({
+      success: true,
+      message: wasPaused ? 'System was already paused' : 'System paused successfully',
+      controls: systemState,
+      changes: [wasPaused ? 'System was already paused' : 'System paused'],
+      updatedBy: req.user.username,
+      timestamp: new Date()
+    });
+  } catch (error) {
+    console.error('Error pausing system:', error);
+    res.status(500).json({ error: 'Failed to pause system' });
+  }
+});
+
+app.post('/api/remote/controls/resume', verifyToken, (req, res) => {
+  try {
+    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+
+    const wasPaused = systemState.isPaused;
+    systemState.isPaused = false;
+    systemState.isEmergencyStopped = false; // Resume also clears emergency stop
+    systemState.lastUpdated = new Date();
+    
+    // Update market simulation with new settings
+    updateMarketSimulation();
+
+    res.json({
+      success: true,
+      message: wasPaused ? 'System resumed successfully' : 'System was already running',
+      controls: systemState,
+      changes: [wasPaused ? 'System resumed' : 'System was already running'],
+      updatedBy: req.user.username,
+      timestamp: new Date()
+    });
+  } catch (error) {
+    console.error('Error resuming system:', error);
+    res.status(500).json({ error: 'Failed to resume system' });
   }
 });
 
@@ -841,8 +923,56 @@ function formatUptime(uptimeMs) {
   }
 }
 
+// Automatic market simulation
+function simulateMarket() {
+  if (systemState.isPaused || systemState.isEmergencyStopped) {
+    return; // Don't update prices when system is paused
+  }
+  
+  stocksData.forEach(stock => {
+    // Generate new price using current volatility setting
+    const newPrice = generateRealisticPriceChange(stock.currentPrice, systemState.volatility);
+    
+    // Update stock data
+    stock.previousPrice = stock.currentPrice;
+    stock.currentPrice = newPrice;
+    stock.percentageChange = ((newPrice - stock.initialPrice) / stock.initialPrice) * 100;
+    stock.lastUpdated = new Date();
+    
+    // Add to price history
+    stock.priceHistory.push({
+      timestamp: new Date(),
+      price: newPrice
+    });
+    
+    // Keep price history manageable (last 50 points)
+    if (stock.priceHistory.length > 50) {
+      stock.priceHistory.shift();
+    }
+  });
+}
+
+// Start market simulation timer
+let marketSimulationInterval;
+function startMarketSimulation() {
+  if (marketSimulationInterval) {
+    clearInterval(marketSimulationInterval);
+  }
+  
+  marketSimulationInterval = setInterval(() => {
+    simulateMarket();
+  }, systemState.updateIntervalMs);
+  
+  console.log(`📈 Market simulation started with ${systemState.updateIntervalMs}ms interval and ${systemState.volatility}% volatility`);
+}
+
+// Update market simulation when controls change
+function updateMarketSimulation() {
+  startMarketSimulation(); // Restart with new settings
+}
+
 // Start server
-app.listen(PORT, '0.0.0.0', () => {
+const server = app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Remote Control Panel API Server running on http://0.0.0.0:${PORT}`);
   console.log('📋 Available endpoints:');
   console.log('  POST /api/remote/auth - Login');
@@ -853,6 +983,8 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log('  DELETE /api/remote/stocks/:symbol - Delete stock');
   console.log('  GET  /api/remote/controls - Get system controls');
   console.log('  PUT  /api/remote/controls - Update controls');
+  console.log('  POST /api/remote/controls/pause - Pause system');
+  console.log('  POST /api/remote/controls/resume - Resume system');
   console.log('  POST /api/remote/controls/emergency - Emergency stop');
   console.log('  GET  /api/remote/status - Get system status');
   console.log('  GET  /api/remote/status/health - Health check');
@@ -877,41 +1009,36 @@ app.listen(PORT, '0.0.0.0', () => {
     });
   }
   
-  // Start real-time price updates
-  console.log('\n🔄 Starting real-time price updates...');
-  const priceUpdateInterval = setInterval(() => {
-    if (!systemState.isPaused && !systemState.isEmergencyStopped) {
-      stocksData.forEach(stock => {
-        // Generate realistic price change
-        const newPrice = generateRealisticPriceChange(stock.currentPrice, 2);
-        
-        // Update stock data
-        stock.previousPrice = stock.currentPrice;
-        stock.currentPrice = newPrice;
-        stock.percentageChange = ((newPrice - stock.initialPrice) / stock.initialPrice) * 100;
-        stock.lastUpdated = new Date();
-        
-        // Add to price history and maintain limit
-        stock.priceHistory.push({
-          timestamp: new Date(),
-          price: newPrice
-        });
-        
-        if (stock.priceHistory.length > 30) {
-          stock.priceHistory.shift(); // Remove oldest point
-        }
-      });
-    }
-  }, systemState.updateIntervalMs);
+  // Start market simulation with volatility support
+  console.log('\n📈 Starting volatility-aware market simulation...');
+  startMarketSimulation();
   
   // Cleanup on server shutdown
   process.on('SIGTERM', () => {
-    clearInterval(priceUpdateInterval);
-    console.log('🛑 Price update interval cleared');
+    if (marketSimulationInterval) {
+      clearInterval(marketSimulationInterval);
+      console.log('🛑 Market simulation stopped');
+    }
   });
   
   process.on('SIGINT', () => {
-    clearInterval(priceUpdateInterval);
-    console.log('🛑 Price update interval cleared');
+    if (marketSimulationInterval) {
+      clearInterval(marketSimulationInterval);
+      console.log('🛑 Market simulation stopped');
+    }
   });
+});
+
+// Handle server listen errors
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use. Please try a different port or stop the process using this port.`);
+    console.error('💡 Try: lsof -ti:' + PORT + ' | xargs kill -9');
+    console.error('💡 Or use a different port: PORT=3002 npm run server');
+  } else if (error.code === 'EACCES') {
+    console.error(`❌ Permission denied to bind to port ${PORT}. Try using a port above 1024 or run with elevated privileges.`);
+  } else {
+    console.error('❌ Server failed to start:', error.message);
+  }
+  process.exit(1);
 });

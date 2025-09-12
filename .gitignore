@@ -42,5 +42,12 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 *.log
+
+# Production process files
+server.pid
+*.pid
+pm2.pid
+logs/
+
 # Local test scripts with sensitive data
 start_test_server.sh

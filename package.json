@@ -5,6 +5,14 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+    "start:production": "node server-production.js",
+    "pm2:start": "pm2 start ecosystem.config.js --env production",
+    "pm2:dev": "pm2 start ecosystem.config.js --only stock-ticker-development",
+    "pm2:stop": "pm2 stop ecosystem.config.js",
+    "pm2:restart": "pm2 restart ecosystem.config.js",
+    "pm2:delete": "pm2 delete ecosystem.config.js",
+    "pm2:logs": "pm2 logs",
+    "pm2:monit": "pm2 monit",
     "dev": "vite",
     "build": "if command -v vite >/dev/null 2>&1; then vite build; else echo 'Vite not available, skipping frontend build (API server deployment)'; fi",
     "heroku-postbuild": "echo 'Skipping postbuild for API server deployment'",
@@ -41,7 +49,7 @@
     "concurrently": "^9.2.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
-    "express": "4.17.1",
+    "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "npm": "^11.2.0",
     "react": "^18",
@@ -54,7 +62,7 @@
     "npm": ">=10.0.0"
   },
   "overrides": {
-    "path-to-regexp": "3.2.0"
+    "path-to-regexp": "3.3.0"
   },
   "devDependencies": {
     "@aws-sdk/client-amplify": "^3.883.0",

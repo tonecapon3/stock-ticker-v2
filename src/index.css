@@ -58,6 +58,38 @@
   @apply outline-blue-500 outline-offset-2;
 }
 
+/* Custom Tooltips */
+.tooltip {
+  @apply relative;
+}
+
+.tooltip::before {
+  content: attr(data-tooltip);
+  @apply absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2;
+  @apply bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg;
+  @apply opacity-0 invisible transition-opacity duration-200;
+  @apply whitespace-nowrap z-50;
+  border: 1px solid #374151;
+}
+
+.tooltip:hover::before {
+  @apply opacity-100 visible;
+}
+
+/* Tooltip arrow */
+.tooltip::after {
+  content: '';
+  @apply absolute bottom-full left-1/2 transform -translate-x-1/2 mb-1;
+  @apply opacity-0 invisible transition-opacity duration-200;
+  border: 4px solid transparent;
+  border-top-color: #111827;
+  @apply z-50;
+}
+
+.tooltip:hover::after {
+  @apply opacity-100 visible;
+}
+
 /* Responsive adjustments */
 @media (max-width: 1024px) {
   .container {
