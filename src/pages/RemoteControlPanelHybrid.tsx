@@ -916,7 +916,7 @@ const RemoteControlContent: React.FC = () => {
                   </button>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2 tooltip cursor-help" data-tooltip="Controls how frequently stock prices are updated. Lower values = faster updates, higher values = smoother performance">
                       Update Speed: {(state.controls.updateIntervalMs / 1000).toFixed(1)}s
                     </label>
                     <input
@@ -926,11 +926,33 @@ const RemoteControlContent: React.FC = () => {
                       step="50"
                       value={state.controls.updateIntervalMs}
                       onChange={(e) => updateControls({ updateIntervalMs: parseInt(e.target.value) })}
-                      className="w-full"
+                      className="w-full tooltip"
+                      data-tooltip="Drag to adjust update frequency: 0.1s (ultra fast) to 5.0s (smooth)"
                     />
                     <div className="flex justify-between text-xs text-gray-400 mt-1">
                       <span>Ultra Fast (0.1s)</span>
                       <span>Smooth (5.0s)</span>
+                    </div>
+                  </div>
+
+                  {/* Volatility Control */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2 tooltip cursor-help" data-tooltip="Controls the randomness and variability of stock price changes. Higher values create more dramatic price swings">
+                      Volatility: {state.controls.volatility || 2.0}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="5.0"
+                      step="0.1"
+                      value={state.controls.volatility || 2.0}
+                      onChange={(e) => updateControls({ volatility: parseFloat(e.target.value) })}
+                      className="w-full tooltip"
+                      data-tooltip="Drag to adjust market volatility: 0.1% (very stable) to 5.0% (very volatile)"
+                    />
+                    <div className="flex justify-between text-xs text-gray-400 mt-1">
+                      <span>Stable (0.1%)</span>
+                      <span>Volatile (5.0%)</span>
                     </div>
                   </div>
 
