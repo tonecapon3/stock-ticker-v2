@@ -110,7 +110,72 @@ const defaultStockData = [
   { symbol: 'MSFT', name: 'Microsoft Corporation', basePrice: 415.20 },
 ];
 
-// Initialize stocks with rich price history
+// USER-SPECIFIC DATA STORAGE
+// Each user gets their own isolated data
+const userSessions = new Map(); // userId -> userData
+
+// Initialize default user data
+function createDefaultUserData() {
+  const stocksData = defaultStockData.map(stock => {
+    const priceHistory = generateFakePriceHistory(stock.basePrice, 30, 15);
+    const mostRecentPrice = priceHistory[priceHistory.length - 1].price;
+    
+    return {
+      symbol: stock.symbol,
+      name: stock.name,
+      currentPrice: mostRecentPrice,
+      previousPrice: priceHistory.length > 1 ? priceHistory[priceHistory.length - 2].price : mostRecentPrice,
+      initialPrice: stock.basePrice,
+      percentageChange: ((mostRecentPrice - stock.basePrice) / stock.basePrice) * 100,
+      lastUpdated: new Date(),
+      priceHistory: priceHistory,
+    };
+  });
+
+  return {
+    stocks: stocksData,
+    systemState: {
+      isPaused: false,
+      updateIntervalMs: 1000, // 1 second for smoother updates
+      selectedCurrency: 'USD',
+      lastUpdated: new Date(),
+      isEmergencyStopped: false
+    },
+    lastActivity: Date.now()
+  };
+}
+
+// Get or create user session data
+function getUserData(userId) {
+  if (!userSessions.has(userId)) {
+    console.log(`👤 Creating new session for user: ${userId}`);
+    userSessions.set(userId, createDefaultUserData());
+  }
+  
+  // Update last activity timestamp
+  const userData = userSessions.get(userId);
+  userData.lastActivity = Date.now();
+  
+  return userData;
+}
+
+// Clean up inactive user sessions (older than 2 hours)
+function cleanupInactiveSessions() {
+  const maxInactiveTime = 2 * 60 * 60 * 1000; // 2 hours
+  const now = Date.now();
+  
+  for (const [userId, userData] of userSessions.entries()) {
+    if (now - userData.lastActivity > maxInactiveTime) {
+      console.log(`🧞 Cleaning up inactive session for user: ${userId}`);
+      userSessions.delete(userId);
+    }
+  }
+}
+
+// Run cleanup every 30 minutes
+setInterval(cleanupInactiveSessions, 30 * 60 * 1000);
+
+// LEGACY GLOBAL DATA (kept for backward compatibility with unauthenticated access)
 let stocksData = defaultStockData.map(stock => {
   const priceHistory = generateFakePriceHistory(stock.basePrice, 30, 15);
   const mostRecentPrice = priceHistory[priceHistory.length - 1].price;
@@ -127,14 +192,47 @@ let stocksData = defaultStockData.map(stock => {
   };
 });
 
-// Mock system state
 let systemState = {
   isPaused: false,
-  updateIntervalMs: 1000, // 1 second for smoother updates
+  updateIntervalMs: 1000,
   selectedCurrency: 'USD',
   lastUpdated: new Date(),
   isEmergencyStopped: false
 };
+
+// User cache to prevent rate limiting
+const userCache = new Map();
+const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Function to get cached user or fetch from Clerk
+async function getCachedUser(userId) {
+  const cached = userCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < USER_CACHE_TTL) {
+    return cached.user;
+  }
+
+  try {
+    const user = await clerkClient.users.getUser(userId);
+    userCache.set(userId, {
+      user,
+      timestamp: Date.now()
+    });
+    return user;
+  } catch (error) {
+    console.error('Error fetching user from Clerk:', error);
+    throw error;
+  }
+}
+
+// Clean up expired cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, cached] of userCache.entries()) {
+    if (now - cached.timestamp >= USER_CACHE_TTL) {
+      userCache.delete(userId);
+    }
+  }
+}, USER_CACHE_TTL); // Clean up every 5 minutes
 
 // Custom middleware to handle authentication for API routes
 function requireAuthWithFallback(req, res, next) {
@@ -149,7 +247,7 @@ function requireAuthWithFallback(req, res, next) {
   return requireAuth()(req, res, next);
 }
 
-// Custom middleware to get user information from Clerk
+// Custom middleware to get user information from Clerk with caching
 async function enrichUserInfo(req, res, next) {
   if (req.isUnauthenticated) {
     return next();
@@ -158,7 +256,8 @@ async function enrichUserInfo(req, res, next) {
   try {
     const auth = getAuth(req);
     if (auth.userId && clerkClient) {
-      const user = await clerkClient.users.getUser(auth.userId);
+      // Use cached user data to prevent rate limiting
+      const user = await getCachedUser(auth.userId);
       
       // Extract user information
       req.user = {
@@ -175,11 +274,17 @@ async function enrichUserInfo(req, res, next) {
     next();
   } catch (error) {
     console.error('Error enriching user info:', error);
+    
+    // Handle rate limiting gracefully
+    if (error.status === 429) {
+      console.warn('⚠️ Clerk rate limit reached, using basic auth info');
+    }
+    
     // Don't fail the request, just continue with basic auth info
     req.user = {
       id: getAuth(req).userId || 'unknown',
       username: 'user',
-      role: 'user'
+      role: 'admin' // Still grant admin role for authenticated users
     };
     next();
   }
@@ -195,20 +300,40 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Stock endpoints - Public read access, authenticated write access
-app.get('/api/remote/stocks', (req, res) => {
-  // Allow unauthenticated read access for main app synchronization
-  const response = {
-    success: true,
-    stocks: stocksData,
-    meta: {
-      count: stocksData.length,
-      lastUpdated: new Date(),
-      authRequired: false
+// Stock endpoints - User-specific data with authentication
+app.get('/api/remote/stocks', requireAuthWithFallback, enrichUserInfo, (req, res) => {
+  try {
+    let stocks, isUserSpecific = false;
+    
+    if (req.isUnauthenticated) {
+      // Unauthenticated users get shared demo data
+      stocks = stocksData;
+      console.log('👥 Serving shared demo data to unauthenticated user');
+    } else {
+      // Authenticated users get their own isolated data
+      const userData = getUserData(req.user.id);
+      stocks = userData.stocks;
+      isUserSpecific = true;
+      console.log(`🔒 Serving isolated data to user: ${req.user.username} (${stocks.length} stocks)`);
     }
-  };
-  
-  res.json(response);
+    
+    const response = {
+      success: true,
+      stocks: stocks,
+      meta: {
+        count: stocks.length,
+        lastUpdated: new Date(),
+        authRequired: false,
+        userSpecific: isUserSpecific,
+        userId: req.isUnauthenticated ? null : req.user.id
+      }
+    };
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching stocks:', error);
+    res.status(500).json({ error: 'Failed to fetch stocks' });
+  }
 });
 
 // Protected endpoints requiring authentication
@@ -218,7 +343,9 @@ app.post('/api/remote/stocks', requireAuthWithFallback, enrichUserInfo, (req, re
       return res.status(401).json({ error: 'Authentication required to add stocks' });
     }
 
-    // All authenticated users can add stocks (no role restriction)
+    // All authenticated users can add stocks to their own portfolio
+    const userData = getUserData(req.user.id);
+    const userStocks = userData.stocks;
 
     const { symbol, name, initialPrice } = req.body;
 
@@ -234,8 +361,9 @@ app.post('/api/remote/stocks', requireAuthWithFallback, enrichUserInfo, (req, re
       return res.status(400).json({ error: 'Price must be between 0.01 and 1,000,000' });
     }
 
-    if (stocksData.some(stock => stock.symbol === symbol)) {
-      return res.status(409).json({ error: 'Stock with this symbol already exists' });
+    // Check if stock exists in user's portfolio
+    if (userStocks.some(stock => stock.symbol === symbol)) {
+      return res.status(409).json({ error: 'Stock with this symbol already exists in your portfolio' });
     }
 
     const newStock = {
@@ -249,13 +377,16 @@ app.post('/api/remote/stocks', requireAuthWithFallback, enrichUserInfo, (req, re
       priceHistory: [{ timestamp: new Date(), price: initialPrice }],
     };
 
-    stocksData.push(newStock);
+    // Add to user's specific portfolio
+    userStocks.push(newStock);
+    console.log(`📈 User ${req.user.username} added stock ${symbol} to their portfolio`);
 
     res.status(201).json({
       success: true,
       stock: newStock,
-      message: `Stock ${symbol} added successfully`,
-      addedBy: req.user.username
+      message: `Stock ${symbol} added successfully to your portfolio`,
+      addedBy: req.user.username,
+      portfolioCount: userStocks.length
     });
   } catch (error) {
     console.error('Error adding stock:', error);
@@ -263,64 +394,16 @@ app.post('/api/remote/stocks', requireAuthWithFallback, enrichUserInfo, (req, re
   }
 });
 
-// Update individual stock price
-app.put('/api/remote/stocks/:symbol', requireAuthWithFallback, enrichUserInfo, (req, res) => {
-  try {
-    if (req.isUnauthenticated) {
-      return res.status(401).json({ error: 'Authentication required to update stocks' });
-    }
-
-    // All authenticated users can update stocks (no role restriction)
-
-    const { symbol } = req.params;
-    const { price } = req.body;
-
-    if (typeof price !== 'number' || price <= 0 || price > 1000000) {
-      return res.status(400).json({ error: 'Valid price is required (0.01 - 1,000,000)' });
-    }
-
-    const stock = stocksData.find(s => s.symbol === symbol.toUpperCase());
-    if (!stock) {
-      return res.status(404).json({ error: 'Stock not found' });
-    }
-
-    const previousPrice = stock.currentPrice;
-    stock.previousPrice = previousPrice;
-    stock.currentPrice = price;
-    stock.percentageChange = ((price - stock.initialPrice) / stock.initialPrice) * 100;
-    stock.lastUpdated = new Date();
-
-    // Add to price history
-    stock.priceHistory.push({
-      timestamp: new Date(),
-      price: price
-    });
-
-    // Keep only last 30 entries
-    if (stock.priceHistory.length > 30) {
-      stock.priceHistory.shift();
-    }
-
-    res.json({
-      success: true,
-      stock: stock,
-      message: `Stock ${symbol} updated successfully`,
-      updatedBy: req.user.username
-    });
-  } catch (error) {
-    console.error('Error updating stock:', error);
-    res.status(500).json({ error: 'Failed to update stock' });
-  }
-});
-
-// Bulk price update endpoint
+// Bulk price update endpoint (MUST come before individual stock endpoint)
 app.put('/api/remote/stocks/bulk', requireAuthWithFallback, enrichUserInfo, (req, res) => {
   try {
     if (req.isUnauthenticated) {
       return res.status(401).json({ error: 'Authentication required for bulk updates' });
     }
 
-    // All authenticated users can perform bulk updates (no role restriction)
+    // All authenticated users can perform bulk updates on their own portfolio
+    const userData = getUserData(req.user.id);
+    const userStocks = userData.stocks;
 
     const { updateType, percentage } = req.body;
 
@@ -331,7 +414,8 @@ app.put('/api/remote/stocks/bulk', requireAuthWithFallback, enrichUserInfo, (req
     let updatedStocks = [];
     const changes = [];
 
-    stocksData.forEach((stock, index) => {
+    // Update only the user's stocks
+    userStocks.forEach((stock, index) => {
       let newPrice;
       const currentPrice = stock.currentPrice;
 
@@ -382,6 +466,8 @@ app.put('/api/remote/stocks/bulk', requireAuthWithFallback, enrichUserInfo, (req
       }
     });
 
+    console.log(`🔄 User ${req.user.username} performed ${updateType} bulk update on ${updatedStocks.length} stocks`);
+
     res.json({
       success: true,
       updatedCount: updatedStocks.length,
@@ -390,11 +476,67 @@ app.put('/api/remote/stocks/bulk', requireAuthWithFallback, enrichUserInfo, (req
       updateType: updateType,
       percentage: percentage,
       updatedBy: req.user.username,
-      timestamp: new Date()
+      timestamp: new Date(),
+      portfolioSize: userStocks.length
     });
   } catch (error) {
     console.error('Error in bulk update:', error);
     res.status(500).json({ error: 'Failed to perform bulk update' });
+  }
+});
+
+// Update individual stock price (MUST come after bulk endpoint)
+app.put('/api/remote/stocks/:symbol', requireAuthWithFallback, enrichUserInfo, (req, res) => {
+  try {
+    if (req.isUnauthenticated) {
+      return res.status(401).json({ error: 'Authentication required to update stocks' });
+    }
+
+    // All authenticated users can update their own stocks
+    const userData = getUserData(req.user.id);
+    const userStocks = userData.stocks;
+
+    const { symbol } = req.params;
+    const { price } = req.body;
+
+    if (typeof price !== 'number' || price <= 0 || price > 1000000) {
+      return res.status(400).json({ error: 'Valid price is required (0.01 - 1,000,000)' });
+    }
+
+    // Find stock in user's portfolio
+    const stock = userStocks.find(s => s.symbol === symbol.toUpperCase());
+    if (!stock) {
+      return res.status(404).json({ error: 'Stock not found in your portfolio' });
+    }
+
+    const previousPrice = stock.currentPrice;
+    stock.previousPrice = previousPrice;
+    stock.currentPrice = price;
+    stock.percentageChange = ((price - stock.initialPrice) / stock.initialPrice) * 100;
+    stock.lastUpdated = new Date();
+
+    // Add to price history
+    stock.priceHistory.push({
+      timestamp: new Date(),
+      price: price
+    });
+
+    // Keep only last 30 entries
+    if (stock.priceHistory.length > 30) {
+      stock.priceHistory.shift();
+    }
+
+    console.log(`💰 User ${req.user.username} updated ${symbol}: ${previousPrice} → ${price}`);
+
+    res.json({
+      success: true,
+      stock: stock,
+      message: `Stock ${symbol} updated successfully in your portfolio`,
+      updatedBy: req.user.username
+    });
+  } catch (error) {
+    console.error('Error updating stock:', error);
+    res.status(500).json({ error: 'Failed to update stock' });
   }
 });
 
@@ -405,23 +547,26 @@ app.delete('/api/remote/stocks/:symbol', requireAuthWithFallback, enrichUserInfo
       return res.status(401).json({ error: 'Authentication required to remove stocks' });
     }
 
-    // Allow all authenticated users to remove stocks
-    // No additional role check needed - authentication is already verified above
+    // Allow all authenticated users to remove stocks from their own portfolio
+    const userData = getUserData(req.user.id);
+    const userStocks = userData.stocks;
 
     const { symbol } = req.params;
-    const stockIndex = stocksData.findIndex(s => s.symbol === symbol.toUpperCase());
+    const stockIndex = userStocks.findIndex(s => s.symbol === symbol.toUpperCase());
 
     if (stockIndex === -1) {
-      return res.status(404).json({ error: 'Stock not found' });
+      return res.status(404).json({ error: 'Stock not found in your portfolio' });
     }
 
-    const deletedStock = stocksData.splice(stockIndex, 1)[0];
+    const deletedStock = userStocks.splice(stockIndex, 1)[0];
+    console.log(`🗑️ User ${req.user.username} removed stock ${symbol} from their portfolio`);
 
     res.json({
       success: true,
-      message: `Stock ${symbol} removed successfully`,
+      message: `Stock ${symbol} removed successfully from your portfolio`,
       removedStock: deletedStock,
-      removedBy: req.user.username
+      removedBy: req.user.username,
+      portfolioCount: userStocks.length
     });
   } catch (error) {
     console.error('Error removing stock:', error);
@@ -429,12 +574,29 @@ app.delete('/api/remote/stocks/:symbol', requireAuthWithFallback, enrichUserInfo
   }
 });
 
-// System controls endpoints
-app.get('/api/remote/controls', (req, res) => {
-  res.json({
-    success: true,
-    controls: systemState
-  });
+// System controls endpoints - User-specific controls
+app.get('/api/remote/controls', requireAuthWithFallback, enrichUserInfo, (req, res) => {
+  try {
+    let controls;
+    
+    if (req.isUnauthenticated) {
+      // Unauthenticated users get global demo controls
+      controls = systemState;
+    } else {
+      // Authenticated users get their own controls
+      const userData = getUserData(req.user.id);
+      controls = userData.systemState;
+    }
+    
+    res.json({
+      success: true,
+      controls: controls,
+      userSpecific: !req.isUnauthenticated
+    });
+  } catch (error) {
+    console.error('Error fetching controls:', error);
+    res.status(500).json({ error: 'Failed to fetch controls' });
+  }
 });
 
 app.put('/api/remote/controls', requireAuthWithFallback, enrichUserInfo, (req, res) => {
@@ -442,6 +604,10 @@ app.put('/api/remote/controls', requireAuthWithFallback, enrichUserInfo, (req, r
     if (req.isUnauthenticated) {
       return res.status(401).json({ error: 'Authentication required to update controls' });
     }
+
+    // Get user's specific system state
+    const userData = getUserData(req.user.id);
+    const userSystemState = userData.systemState;
 
     const allowedUpdates = ['isPaused', 'updateIntervalMs', 'selectedCurrency', 'isEmergencyStopped'];
     const updates = {};
@@ -457,14 +623,16 @@ app.put('/api/remote/controls', requireAuthWithFallback, enrichUserInfo, (req, r
       return res.status(400).json({ error: 'No valid updates provided' });
     }
 
-    // Apply updates
-    Object.assign(systemState, updates);
-    systemState.lastUpdated = new Date();
+    // Apply updates to user's specific controls
+    Object.assign(userSystemState, updates);
+    userSystemState.lastUpdated = new Date();
+    
+    console.log(`⚙️ User ${req.user.username} updated controls:`, updates);
 
     res.json({
       success: true,
-      controls: systemState,
-      message: 'Controls updated successfully',
+      controls: userSystemState,
+      message: 'Your controls updated successfully',
       updatedBy: req.user.username
     });
   } catch (error) {

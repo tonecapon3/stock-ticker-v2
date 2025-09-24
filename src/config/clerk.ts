@@ -28,13 +28,35 @@ if (isPlaceholderKey) {
 // Clerk configuration object
 export const clerkConfig = {
   publishableKey,
-  // Add afterSignOutUrl to handle sign-out redirects properly
+  
+  // Multi-session and account switching configuration
+  allowedRedirectOrigins: ['http://localhost:3000', window?.location?.origin].filter(Boolean),
+  signInUrl: '/sign-in',
+  signUpUrl: '/sign-up',
+  afterSignInUrl: '/remote-control',
+  afterSignUpUrl: '/remote-control',
   afterSignOutUrl: '/sign-in',
+  
+  // Enable multiple sessions (allows switching between accounts)
+  signInMode: 'auto',
+  
+  // Handle session management errors
+  onSignInFailure: (error: any) => {
+    console.error('Clerk sign-in failed:', error);
+    // Clear any existing session data
+    if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
+    }
+  },
+  
   // Add error handling options
   onSignOutFailure: (error: Error) => {
     console.error('Clerk sign-out failed:', error);
-    // Fallback: redirect to sign-in page
+    // Clear session data and redirect
     if (typeof window !== 'undefined') {
+      localStorage.clear();
+      sessionStorage.clear();
       window.location.href = '/sign-in';
     }
   },

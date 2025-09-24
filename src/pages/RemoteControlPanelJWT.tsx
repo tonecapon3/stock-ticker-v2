@@ -9,6 +9,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { getApiBaseUrl, shouldUseApiServer } from '../lib/config';
 import JWTAuthGuard from '../components/auth/JWTAuthGuard';
 import { CURRENCIES, Currency, type CurrencyInfo } from '../lib/types';
+import Tooltip from '../components/Tooltip';
 
 interface Stock {
   symbol: string;
@@ -719,9 +720,19 @@ const RemoteControlPanelJWT: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-3">
-                    Update Speed
-                  </label>
+                  <div className="flex items-center gap-2 mb-3">
+                    <label className="block text-sm font-medium text-gray-300">
+                      Update Speed
+                    </label>
+                    <Tooltip 
+                      content="How fast stock prices refresh. Lower = faster updates, Higher = smoother performance."
+                      position="top"
+                    >
+                      <div className="inline-flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-blue-600 rounded-full cursor-help hover:bg-blue-500 transition-colors">
+                        ?
+                      </div>
+                    </Tooltip>
+                  </div>
                   <div className="space-y-3">
                     <input
                       type="range"
@@ -741,9 +752,19 @@ const RemoteControlPanelJWT: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-300 mb-2">
-                    Volatility: {state.controls.volatility}%
-                  </label>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="block text-sm font-medium text-gray-300">
+                      Volatility: {state.controls.volatility}%
+                    </label>
+                    <Tooltip 
+                      content="How much prices can change. Lower = stable prices, Higher = dramatic swings."
+                      position="top"
+                    >
+                      <div className="inline-flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-blue-600 rounded-full cursor-help hover:bg-blue-500 transition-colors">
+                        ?
+                      </div>
+                    </Tooltip>
+                  </div>
                   <input
                     type="range"
                     min="0.1"

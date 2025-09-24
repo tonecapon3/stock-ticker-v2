@@ -1,10 +1,11 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { TickerProvider } from './lib/context';
 import { TabContent } from './components/TabContent';
 import TickerPage from './pages/TickerPage';
 import ControlsPage from './pages/ControlsPage';
 import HomePage from './pages/HomePage';
+import LandingPage from './pages/LandingPage';
 import RemoteControlPanelJWT from './pages/RemoteControlPanelJWT';
 import { useSecurity } from './hooks/useSecurity';
 import SecurityWarning from './components/SecurityWarning';
@@ -15,17 +16,30 @@ import SignUpPage from './components/auth/SignUpPage';
 import UserProfilePage, { CompactUserButton, UserInfoDisplay } from './components/auth/UserProfile';
 import AuthGuard from './components/auth/AuthGuard';
 import AuthLoading from './components/auth/AuthLoading';
+import BridgeStatus from './components/auth/BridgeStatus';
 import { useAuth } from './hooks/useAuth';
 
 function App() {
   return (
     <Router>
       <Routes>
-        {/* Authentication Routes - Public */}
+        {/* Public Routes */}
+        <Route path="/welcome" element={<LandingPage />} />
         <Route path="/sign-in" element={<SignInPage />} />
         <Route path="/sign-up" element={<SignUpPage />} />
         
-        {/* User Profile Route - Protected */}
+        {/* Remote Control Panel Route - Independent JWT Authentication */}
+        <Route path="/remote" element={<RemoteControlPanelJWT />} />
+        
+        {/* Protected Routes - Require Clerk Authentication */}
+        <Route 
+          path="/" 
+          element={
+            <AuthGuard>
+              <MainApp />
+            </AuthGuard>
+          } 
+        />
         <Route 
           path="/profile" 
           element={
@@ -35,24 +49,8 @@ function App() {
           } 
         />
         
-        {/* Remote Control Panel Route - JWT Authentication Only */}
-        <Route 
-          path="/remote" 
-          element={<RemoteControlPanelJWT />}
-        />
-        
-        {/* Main Application Route - Protected */}
-        <Route 
-          path="/" 
-          element={
-            <AuthGuard>
-              <MainApp />
-            </AuthGuard>
-          } 
-        />
-        
-        {/* Fallback Route */}
-        <Route path="*" element={<Navigate to="/" replace />} />
+        {/* Fallback Route - Redirect unauthenticated users to welcome page */}
+        <Route path="*" element={<Navigate to="/welcome" replace />} />
       </Routes>
     </Router>
   );
@@ -61,7 +59,7 @@ function App() {
 // Separate component for the main app
 function MainApp() {
   const securityState = useSecurity();
-  const { isLoaded } = useAuth();
+  const { isLoaded, isSignedIn } = useAuth();
 
   // Show loading while Clerk is initializing
   if (!isLoaded) {
@@ -77,13 +75,35 @@ function MainApp() {
           <header className="bg-blue-800 text-white shadow-md">
             <div className="container mx-auto py-4 px-6">
               <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <h1 className="text-2xl font-bold">📈 Stock Ticker</h1>
-                  <span className="text-blue-200 text-sm">Real-time market monitoring</span>
+                <div className="flex items-center space-x-6">
+                  <div className="flex items-center space-x-4">
+                    <h1 className="text-2xl font-bold">📈 Stock Ticker</h1>
+                    <span className="text-blue-200 text-sm">Stock Simulation Monitoring Tool</span>
+                  </div>
+                  
+                  {/* Navigation Menu */}
+                  <nav className="flex space-x-4">
+                    <Link 
+                      to="/" 
+                      className="text-blue-200 hover:text-white transition-colors px-3 py-1 rounded"
+                    >
+                      Dashboard
+                    </Link>
+                    <Link 
+                      to="/remote" 
+                      className="text-blue-200 hover:text-white transition-colors px-3 py-1 rounded"
+                    >
+                      Control Panel
+                    </Link>
+                  </nav>
                 </div>
                 
-                {/* User Navigation */}
+                {/* User Navigation - Always show authenticated user (AuthGuard ensures this) */}
                 <div className="flex items-center space-x-4">
+                  {/* Bridge Status for Clerk users */}
+                  <BridgeStatus className="mr-2" />
+                  
+                  {/* Authenticated user - show profile info */}
                   <UserInfoDisplay />
                   <div className="border-l border-blue-600 pl-4">
                     <CompactUserButton />

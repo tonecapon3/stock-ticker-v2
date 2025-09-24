@@ -97,7 +97,7 @@ export interface StockInfo {
   currentPrice: number;
   previousPrice: number;
   initialPrice: number; // The original price when stock was first added
-  percentageChange: number;
+  percentChange: number; // Changed from percentageChange to match API
   lastUpdated: Date;
   priceHistory: PricePoint[];
 }

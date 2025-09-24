@@ -7,9 +7,12 @@
 
 import React from 'react';
 import { SignIn } from '@clerk/clerk-react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 const SignInPage: React.FC = () => {
+  const location = useLocation();
+  const from = (location.state as any)?.from || '/';
+  
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
@@ -47,7 +50,7 @@ const SignInPage: React.FC = () => {
                 colorText: "#F9FAFB",
               },
             }}
-            redirectUrl="/"
+            redirectUrl={from}
             signUpUrl="/sign-up"
           />
         </div>
@@ -66,10 +69,10 @@ const SignInPage: React.FC = () => {
           
           <div className="mt-4 text-xs text-gray-500">
             <Link 
-              to="/" 
+              to="/welcome" 
               className="hover:text-gray-400"
             >
-              ← Back to Home
+              ← Back to Welcome
             </Link>
           </div>
         </div>

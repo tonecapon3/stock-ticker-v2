@@ -2,14 +2,18 @@
  * Sign Up Page Component
  * 
  * Provides a sign-up interface using Clerk's SignUp component
- * with custom styling to match the Stock Ticker app theme
+ * with custom styling to match the Stock Ticker app theme.
+ * Handles redirects after successful sign-up based on return URL parameters.
  */
 
 import React from 'react';
 import { SignUp } from '@clerk/clerk-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 const SignUpPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const returnUrl = searchParams.get('return_url') || '/';
+  
   return (
     <div className="min-h-screen bg-gray-900 flex items-center justify-center px-4">
       <div className="max-w-md w-full">
@@ -47,8 +51,8 @@ const SignUpPage: React.FC = () => {
                 colorText: "#F9FAFB",
               },
             }}
-            redirectUrl="/"
-            signInUrl="/sign-in"
+            redirectUrl={returnUrl}
+            signInUrl={`/sign-in${searchParams.toString() ? `?${searchParams.toString()}` : ''}`}
           />
         </div>
 
@@ -57,7 +61,7 @@ const SignUpPage: React.FC = () => {
           <div className="text-sm text-gray-400">
             Already have an account?{' '}
             <Link 
-              to="/sign-in" 
+              to={`/sign-in${searchParams.toString() ? `?${searchParams.toString()}` : ''}`}
               className="text-blue-400 hover:text-blue-300 font-medium"
             >
               Sign in here
@@ -66,10 +70,10 @@ const SignUpPage: React.FC = () => {
           
           <div className="mt-4 text-xs text-gray-500">
             <Link 
-              to="/" 
+              to="/welcome" 
               className="hover:text-gray-400"
             >
-              ← Back to Home
+              ← Back to Welcome
             </Link>
           </div>
         </div>

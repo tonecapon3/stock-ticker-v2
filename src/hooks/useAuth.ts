@@ -65,22 +65,7 @@ export const useAuth = () => {
     }
   }, [getToken, isSignedIn]);
 
-  // Check if user has specific role (if using Clerk's organization features)
-  const hasRole = useCallback(
-    (role: string) => {
-      if (!user) return false;
-      // This would need to be implemented based on your role structure
-      // For now, we'll check if the user has admin in their metadata
-      const userRole = user.publicMetadata?.role as string;
-      return userRole === role;
-    },
-    [user]
-  );
-
-  // Check if user is admin (helper function)
-  const isAdmin = useCallback(() => {
-    return hasRole('admin');
-  }, [hasRole]);
+  // Note: Role-based access control removed - all authenticated users have equal access
 
   // User display information
   const userInfo = {
@@ -91,7 +76,7 @@ export const useAuth = () => {
     fullName: user?.fullName,
     username: user?.username,
     imageUrl: user?.imageUrl,
-    role: user?.publicMetadata?.role as string || 'user',
+    // Note: Role field removed - all users have equal access
   };
 
   return {
@@ -109,10 +94,9 @@ export const useAuth = () => {
     // Authentication actions
     signOut,
     getAuthToken,
+    getToken, // Add direct access to Clerk's getToken for compatibility
     
-    // Role-based access
-    hasRole,
-    isAdmin,
+    // Note: Role-based access removed
     
     // Clerk instance (for advanced usage)
     clerk,
@@ -156,7 +140,7 @@ export const useUserInfo = () => {
     fullName: user.fullName,
     username: user.username,
     imageUrl: user.imageUrl,
-    role: user.publicMetadata?.role as string || 'user',
+    // Note: Role field removed - all users have equal access
   };
 
   return {

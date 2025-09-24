@@ -28,6 +28,10 @@ import {
 } from './types';
 import { shouldUseApiServer, buildApiUrl, API_ENDPOINTS, isDevelopment, checkApiHealth } from './config';
 import { generateMultipleStockHistories, generateRealisticPriceChange, updatePriceHistory } from '../utils/dataGenerator';
+import { tokenStorage } from '../auth/utils/index';
+import { authenticateWithJWTBridge, isJWTBridgeAuthenticated, getJWTBridgeHeaders, clearJWTBridge } from '../auth/utils/clerkJwtBridge';
+import { useAuth } from '../hooks/useAuth';
+import { useClerkJWTBridge } from '../hooks/useClerkJWTBridge';
 
 // Secure storage response type definition
 interface SecureStorageResponse<T> {
@@ -161,6 +165,35 @@ function maskSensitiveData(data: any): any {
   return data;
 }
 
+/**
+ * Get JWT authentication headers for API requests
+ * Supports both direct JWT auth and Clerk-bridged JWT auth
+ */
+function getJWTAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  
+  // Check if we have JWT bridge authentication (for Clerk users)
+  if (isJWTBridgeAuthenticated()) {
+    return getJWTBridgeHeaders();
+  }
+  
+  // Fallback to direct JWT token storage
+  const token = tokenStorage.getJWTToken();
+  const sessionId = localStorage.getItem('jwt_session_id');
+  
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  if (sessionId) {
+    headers['X-Session-ID'] = sessionId;
+  }
+  
+  return headers;
+}
+
 // Create the context with a default undefined value
 export const TickerContext = createContext<TickerContextType | undefined>(undefined);
 
@@ -188,7 +221,7 @@ const DEFAULT_STOCKS: StockInfo[] = defaultStockData.map(stock => {
     currentPrice: mostRecentPrice,
     previousPrice: priceHistory.length > 1 ? priceHistory[priceHistory.length - 2].price : mostRecentPrice,
     initialPrice: stock.basePrice,
-    percentageChange: ((mostRecentPrice - stock.basePrice) / stock.basePrice) * 100,
+    percentChange: ((mostRecentPrice - stock.basePrice) / stock.basePrice) * 100,
     lastUpdated: new Date(),
     priceHistory: priceHistory,
   };
@@ -233,6 +266,12 @@ class TickerErrorBoundary extends React.Component<
 
 // Provider component for the context
 export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // Get Clerk auth state
+  const { isSignedIn } = useAuth();
+  
+  // Initialize Clerk-JWT bridge for API authentication
+  const { isBridging, isBridged, bridgeError, isReadyForAPI } = useClerkJWTBridge();
+  
   // State for handling errors
   const [error, setError] = useState<string | null>(null);
   
@@ -365,7 +404,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         const updatedStocks = prevState.stocks.map((stock) => {
           if (stock.symbol === sanitizedSymbol) {
             const previousPrice = stock.currentPrice;
-            const percentageChange = ((price - previousPrice) / previousPrice) * 100;
+            const percentChange = ((price - previousPrice) / previousPrice) * 100;
             const timestamp = new Date();
             
             // Add the new price to history, keeping only MAX_HISTORY_POINTS
@@ -380,7 +419,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               ...stock,
               previousPrice,
               currentPrice: price,
-              percentageChange,
+              percentChange,
               lastUpdated: timestamp,
               priceHistory: updatedHistory,
             };
@@ -504,7 +543,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         currentPrice: initialPrice,
         previousPrice: initialPrice,
         initialPrice: initialPrice,
-        percentageChange: 0,
+        percentChange: 0,
         lastUpdated: timestamp,
         priceHistory: [{ timestamp, price: initialPrice }],
       };
@@ -698,7 +737,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             initialPrice: convertedInitialPrice,
             priceHistory: convertedHistory,
             // Recalculate percentage change in the new currency
-            percentageChange: convertedPreviousPrice > 0 
+            percentChange: convertedPreviousPrice > 0 
               ? ((convertedCurrentPrice - convertedPreviousPrice) / convertedPreviousPrice) * 100
               : 0
           };
@@ -781,8 +820,6 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          // Note: In a real implementation, you'd want to handle authentication
-          // For now, we'll just fetch without auth for the main app
         },
       });
       
@@ -876,7 +913,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               ...localStock,
               currentPrice: apiStock.currentPrice,
               previousPrice: apiStock.previousPrice,
-              percentageChange: apiStock.percentageChange,
+              percentChange: apiStock.percentChange, // Fixed: API returns percentChange not percentageChange
               lastUpdated: new Date(apiStock.lastUpdated),
               priceHistory: finalPriceHistory
             });
@@ -934,7 +971,6 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          // No authentication needed for controls endpoint
         },
       });
       
@@ -990,8 +1026,12 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
 
   /**
    * Effect to sync with API server periodically
+   * Waits for Clerk-JWT bridge to be ready before syncing
    */
   useEffect(() => {
+    // No need to wait for JWT authentication for read-only API calls
+    // The server allows unauthenticated access for local sync operations
+    
     console.log('🔄 Setting up API sync...');
     
     // Check API health first
@@ -1074,7 +1114,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
             const constrainedPrice = Math.max(SECURITY_CONSTRAINTS.MIN_STOCK_PRICE, 
                                      Math.min(SECURITY_CONSTRAINTS.MAX_STOCK_PRICE, newPrice));
             
-            const percentageChange = ((constrainedPrice - stock.initialPrice) / stock.initialPrice) * 100;
+            const percentChange = ((constrainedPrice - stock.initialPrice) / stock.initialPrice) * 100;
             const timestamp = new Date();
             
             // Update price history using the utility function
@@ -1084,7 +1124,7 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
               ...stock,
               previousPrice: stock.currentPrice,
               currentPrice: constrainedPrice,
-              percentageChange,
+              percentChange,
               lastUpdated: timestamp,
               priceHistory: updatedHistory,
             };

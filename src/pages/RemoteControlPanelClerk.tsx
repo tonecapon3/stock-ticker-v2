@@ -9,7 +9,9 @@ interface Stock {
   currentPrice: number;
   previousPrice: number;
   initialPrice: number;
-  percentageChange: number;
+  change: number;
+  percentChange: number;
+  volume: number;
   lastUpdated: string;
   priceHistory: Array<{ timestamp: string; price: number }>;
 }
@@ -17,6 +19,7 @@ interface Stock {
 interface SystemControls {
   isPaused: boolean;
   updateIntervalMs: number;
+  volatility: number;
   selectedCurrency: string;
   lastUpdated: string;
   isEmergencyStopped: boolean;
@@ -92,7 +95,56 @@ const RemoteControlPanelClerk: React.FC = () => {
   // Only initialize auth hooks if API server is available
   const { isLoaded, isSignedIn, getAuthToken, userInfo, signOut } = useAuth();
   
-  // API Base URL - only set if we reach this point (API server available)
+  // Enhanced sign-out function for account switching
+  const handleSignOut = useCallback(async () => {
+    try {
+      console.log('🚪 Signing out current user...');
+      
+      // Clear local state first
+      setState({
+        stocks: [],
+        controls: null,
+        connectionStatus: 'disconnected',
+        lastError: null,
+        isLoading: false,
+      });
+      
+      // Clear form states
+      setEditingStock(null);
+      setEditPrice('');
+      setAddStockForm({ symbol: '', name: '', price: '' });
+      setBulkPercentage('');
+      
+      // Clear browser storage
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+      }
+      
+      // Sign out from Clerk
+      await signOut();
+      
+      console.log('✅ Sign-out successful');
+      
+      // Force redirect to sign-in page
+      setTimeout(() => {
+        if (typeof window !== 'undefined') {
+          window.location.href = '/sign-in';
+        }
+      }, 100);
+      
+    } catch (error) {
+      console.error('❌ Sign-out error:', error);
+      // Force redirect even if sign-out fails
+      if (typeof window !== 'undefined') {
+        localStorage.clear();
+        sessionStorage.clear();
+        window.location.href = '/sign-in';
+      }
+    }
+  }, [signOut]);
+  
+  // API Base URL - using remote endpoints to control shared data
   const API_BASE = `${getApiBaseUrl()}/api/remote`;
 
   const [state, setState] = useState<RemoteState>({
@@ -141,8 +193,18 @@ const RemoteControlPanelClerk: React.FC = () => {
   const apiCall = useCallback(async (endpoint: string, options: RequestInit = {}) => {
     try {
       const token = await getAuthToken();
+      const fullUrl = `${API_BASE}${endpoint}`;
       
-      const response = await fetch(`${API_BASE}${endpoint}`, {
+      console.log('📡 API Call:', { 
+        endpoint, 
+        fullUrl,
+        method: options.method || 'GET',
+        hasToken: Boolean(token),
+        tokenPrefix: token ? token.substring(0, 20) + '...' : 'none',
+        body: options.body 
+      });
+      
+      const response = await fetch(fullUrl, {
         ...options,
         headers: {
           'Authorization': token ? `Bearer ${token}` : '',
@@ -151,18 +213,21 @@ const RemoteControlPanelClerk: React.FC = () => {
         },
       });
 
+      console.log('📡 Response:', { status: response.status, statusText: response.statusText });
+
       if (response.status === 401) {
         setState(prev => ({
           ...prev,
           lastError: 'Authentication expired. Please sign in again.',
           connectionStatus: 'error'
         }));
-        setTimeout(() => signOut(), 2000);
+        setTimeout(() => handleSignOut(), 2000);
         throw new Error('Authentication expired');
       }
 
       return response;
     } catch (error) {
+      console.error('💥 API Call error:', error);
       setState(prev => ({
         ...prev,
         connectionStatus: 'error',
@@ -170,15 +235,17 @@ const RemoteControlPanelClerk: React.FC = () => {
       }));
       throw error;
     }
-  }, [getAuthToken, signOut]);
+  }, [getAuthToken, handleSignOut]);
 
-  // Fetch stocks
+  // Fetch user-specific stocks
   const fetchStocks = async () => {
     try {
+      // Use authenticated API call for user-specific stocks
       const response = await apiCall('/stocks');
       const data = await response.json();
       
       if (response.ok && data.success) {
+        console.log(`📋 User ${userInfo?.username || 'unknown'} loaded ${data.stocks.length} stocks`);
         setState(prev => ({
           ...prev,
           stocks: data.stocks,
@@ -188,17 +255,22 @@ const RemoteControlPanelClerk: React.FC = () => {
       } else {
         setState(prev => ({
           ...prev,
-          lastError: data.error || 'Failed to fetch stocks'
+          lastError: data.error || 'Failed to fetch your stocks'
         }));
       }
     } catch (error) {
-      // Error already handled in apiCall
+      setState(prev => ({
+        ...prev,
+        connectionStatus: 'error',
+        lastError: error instanceof Error ? error.message : 'Failed to fetch your stocks'
+      }));
     }
   };
 
-  // Fetch controls
+  // Fetch user-specific controls
   const fetchControls = async () => {
     try {
+      // Use authenticated API call for user-specific controls
       const response = await apiCall('/controls');
       const data = await response.json();
       
@@ -212,11 +284,15 @@ const RemoteControlPanelClerk: React.FC = () => {
       } else {
         setState(prev => ({
           ...prev,
-          lastError: data.error || 'Failed to fetch controls'
+          lastError: data.error || 'Failed to fetch your controls'
         }));
       }
     } catch (error) {
-      // Error already handled in apiCall
+      setState(prev => ({
+        ...prev,
+        connectionStatus: 'error',
+        lastError: error instanceof Error ? error.message : 'Failed to fetch your controls'
+      }));
     }
   };
 
@@ -246,49 +322,115 @@ const RemoteControlPanelClerk: React.FC = () => {
 
   // Bulk update stocks
   const bulkUpdateStocks = async (updateType: string, percentage?: number) => {
+    console.log('🔄 Bulk update called:', { updateType, percentage });
+    
     try {
       const response = await apiCall('/stocks/bulk', {
         method: 'PUT',
         body: JSON.stringify({ updateType, percentage }),
       });
 
+      console.log('📡 Response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('✅ Bulk update successful:', data);
         setState(prev => ({ ...prev, lastError: null }));
         await fetchStocks();
         return { success: true, data };
       } else {
-        const data = await response.json();
+        // Handle different types of errors
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch {
+          errorData = { error: `Server error: ${response.status} ${response.statusText}` };
+        }
+        
+        console.log('❌ Bulk update failed:', { status: response.status, data: errorData });
+        
+        // Specific handling for authentication errors
+        if (response.status === 401) {
+          setState(prev => ({
+            ...prev,
+            lastError: 'Authentication expired. Please sign in again.'
+          }));
+          setTimeout(() => signOut(), 2000);
+          return { success: false, error: 'Authentication expired' };
+        }
+        
+        // Handle redirect responses (like 302)
+        if (response.status >= 300 && response.status < 400) {
+          setState(prev => ({
+            ...prev,
+            lastError: 'Authentication required. Please make sure you are signed in.'
+          }));
+          return { success: false, error: 'Authentication required' };
+        }
+        
         setState(prev => ({
           ...prev,
-          lastError: data.error || 'Failed to perform bulk update'
+          lastError: errorData.error || `Failed to perform bulk update (${response.status})`
         }));
-        return { success: false, error: data.error };
+        return { success: false, error: errorData.error };
       }
     } catch (error) {
+      console.error('💥 Bulk update error:', error);
       const errorMsg = error instanceof Error ? error.message : 'Failed to perform bulk update';
       setState(prev => ({ ...prev, lastError: errorMsg }));
       return { success: false, error: errorMsg };
     }
   };
 
-  // Add new stock
+  // Add new stock - Full functionality enabled
   const addNewStock = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const { symbol, name, price } = addStockForm;
+    const initialPrice = parseFloat(price);
+
+    // Validation
+    if (!symbol.trim() || !name.trim() || isNaN(initialPrice)) {
+      setState(prev => ({
+        ...prev,
+        lastError: 'Please fill in all fields with valid data'
+      }));
+      return false;
+    }
+
+    if (initialPrice <= 0 || initialPrice > 1000000) {
+      setState(prev => ({
+        ...prev,
+        lastError: 'Price must be between 0.01 and 1,000,000'
+      }));
+      return false;
+    }
+
+    if (!/^[A-Z]{1,5}$/.test(symbol.toUpperCase())) {
+      setState(prev => ({
+        ...prev,
+        lastError: 'Symbol must be 1-5 uppercase letters'
+      }));
+      return false;
+    }
+
     try {
       const response = await apiCall('/stocks', {
         method: 'POST',
         body: JSON.stringify({
-          symbol: addStockForm.symbol.toUpperCase(),
-          name: addStockForm.name,
-          initialPrice: parseFloat(addStockForm.price),
-        }),
+          symbol: symbol.toUpperCase(),
+          name: name.trim(),
+          initialPrice: initialPrice
+        })
       });
 
       if (response.ok) {
-        await fetchStocks();
+        const data = await response.json();
+        setState(prev => ({ ...prev, lastError: null }));
+        // Clear the form
         setAddStockForm({ symbol: '', name: '', price: '' });
+        // Refresh the stocks list
+        await fetchStocks();
         return true;
       } else {
         const data = await response.json();
@@ -299,36 +441,39 @@ const RemoteControlPanelClerk: React.FC = () => {
         return false;
       }
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : 'Failed to add stock';
+      setState(prev => ({ ...prev, lastError: errorMsg }));
       return false;
     }
   };
 
-  // Remove stock
+  // Remove stock - Full functionality enabled
   const deleteStock = async (symbol: string) => {
-    if (!confirm(`Are you sure you want to remove ${symbol} from the panel?`)) return false;
+    if (!confirm(`Are you sure you want to delete ${symbol}? This action cannot be undone.`)) {
+      return false;
+    }
 
     try {
       const response = await apiCall(`/stocks/${symbol}`, {
-        method: 'DELETE',
+        method: 'DELETE'
       });
 
       if (response.ok) {
+        const data = await response.json();
+        setState(prev => ({ ...prev, lastError: null }));
+        // Refresh the stocks list
         await fetchStocks();
-        setState(prev => ({
-          ...prev,
-          lastError: null
-        }));
         return true;
       } else {
         const data = await response.json();
         setState(prev => ({
           ...prev,
-          lastError: data.error || 'Failed to remove stock'
+          lastError: data.error || `Failed to delete ${symbol}`
         }));
         return false;
       }
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : 'Failed to remove stock';
+      const errorMsg = error instanceof Error ? error.message : `Failed to delete ${symbol}`;
       setState(prev => ({ ...prev, lastError: errorMsg }));
       return false;
     }
@@ -358,49 +503,13 @@ const RemoteControlPanelClerk: React.FC = () => {
     }
   };
 
-  // Dedicated pause/resume functions
+  // Toggle pause/resume using the controls endpoint
   const pauseSystem = async () => {
-    try {
-      const response = await apiCall('/controls/pause', {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        await fetchControls();
-        return true;
-      } else {
-        const data = await response.json();
-        setState(prev => ({
-          ...prev,
-          lastError: data.error || 'Failed to pause system'
-        }));
-        return false;
-      }
-    } catch (error) {
-      return false;
-    }
+    return await updateControls({ isPaused: true });
   };
 
   const resumeSystem = async () => {
-    try {
-      const response = await apiCall('/controls/resume', {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        await fetchControls();
-        return true;
-      } else {
-        const data = await response.json();
-        setState(prev => ({
-          ...prev,
-          lastError: data.error || 'Failed to resume system'
-        }));
-        return false;
-      }
-    } catch (error) {
-      return false;
-    }
+    return await updateControls({ isPaused: false });
   };
 
   const togglePause = async () => {
@@ -411,9 +520,9 @@ const RemoteControlPanelClerk: React.FC = () => {
     }
   };
 
-  // Restart server (admin only)
+  // Reset user session
   const restartServer = async () => {
-    if (!confirm('Are you sure you want to restart the API server? This will disconnect all users temporarily.')) {
+    if (!confirm('Are you sure you want to reset your session? This will restore your portfolio to defaults and cannot be undone.')) {
       return false;
     }
 
@@ -432,16 +541,18 @@ const RemoteControlPanelClerk: React.FC = () => {
           connectionStatus: 'connecting',
           isLoading: false
         }));
-        alert(`API server restart initiated successfully. The API server will restart shortly.`);
+        alert(`Your session has been reset successfully. You now have fresh default data.`);
+        // Refresh data to show the reset
         setTimeout(() => {
-          signOut();
-        }, 2000);
+          fetchStocks();
+          fetchControls();
+        }, 1000);
         return true;
       } else {
         const data = await response.json();
         setState(prev => ({
           ...prev,
-          lastError: data.error || 'Failed to restart API server',
+          lastError: data.error || 'Failed to reset your session',
           isLoading: false
         }));
         return false;
@@ -476,11 +587,11 @@ const RemoteControlPanelClerk: React.FC = () => {
     setEditPrice('');
   };
 
-  // Verify authentication with server
+  // Verify authentication by checking user endpoint
   const verifyAuthentication = async () => {
     try {
       console.log('🔐 Verifying authentication with API server...');
-      const response = await apiCall('/auth');
+      const response = await apiCall('/user');
       const data = await response.json();
       
       if (response.ok && data.success) {
@@ -502,6 +613,11 @@ const RemoteControlPanelClerk: React.FC = () => {
       }
     } catch (error) {
       console.error('❌ Auth verification error:', error);
+      setState(prev => ({
+        ...prev,
+        lastError: error instanceof Error ? error.message : 'Authentication verification failed',
+        connectionStatus: 'error'
+      }));
       return false;
     }
   };
@@ -546,7 +662,10 @@ const RemoteControlPanelClerk: React.FC = () => {
   }, [state.lastError]);
 
   // Utility functions
-  const formatPrice = (price: number, currency?: string) => {
+  const formatPrice = (price: number | undefined | null, currency?: string) => {
+    if (price === undefined || price === null || isNaN(price)) {
+      return '$0.00';
+    }
     const currencyCode = currency || state.controls?.selectedCurrency || 'USD';
     const currencyInfo = getCurrencyInfo(currencyCode);
     
@@ -565,7 +684,12 @@ const RemoteControlPanelClerk: React.FC = () => {
     }
   };
 
-  const formatPercentage = (percentage: number) => `${percentage >= 0 ? '+' : ''}${percentage.toFixed(2)}%`;
+  const formatPercentage = (percentage: number | undefined | null) => {
+    if (percentage === undefined || percentage === null || isNaN(percentage)) {
+      return '0.00%';
+    }
+    return `${percentage >= 0 ? '+' : ''}${percentage.toFixed(2)}%`;
+  };
 
   const getCurrencyInfo = (code: string) => {
     const currencies = {
@@ -615,8 +739,9 @@ const RemoteControlPanelClerk: React.FC = () => {
                   {userInfo.fullName || userInfo.username} ({userInfo.role})
                 </span>
                 <button
-                  onClick={() => signOut()}
+                  onClick={handleSignOut}
                   className="text-sm text-red-400 hover:text-red-300 transition-colors"
+                  title="Sign out and switch accounts"
                 >
                   Logout
                 </button>
@@ -685,8 +810,8 @@ const RemoteControlPanelClerk: React.FC = () => {
                           <>
                             <div className="text-right">
                               <div className="font-semibold">{formatPrice(stock.currentPrice)}</div>
-                              <div className={`text-sm ${stock.percentageChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                                {formatPercentage(stock.percentageChange)}
+                              <div className={`text-sm ${(stock.percentChange || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {formatPercentage(stock.percentChange)}
                               </div>
                             </div>
                             <div className="flex space-x-2">
@@ -798,11 +923,7 @@ const RemoteControlPanelClerk: React.FC = () => {
                     Random Fluctuation
                   </button>
                   <button
-                    onClick={() => {
-                      if (confirm(`Are you sure you want to reset all ${state.stocks.length} stocks to their initial prices? This cannot be undone.`)) {
-                        bulkUpdateStocks('reset');
-                      }
-                    }}
+                    onClick={() => bulkUpdateStocks('reset')}
                     className="py-2 px-3 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm font-medium transition-colors"
                     title="Reset all stocks to their original prices when first added to the system"
                   >
@@ -963,8 +1084,8 @@ const RemoteControlPanelClerk: React.FC = () => {
                       <div className="flex items-start space-x-2">
                         <span className="text-orange-300">⚠️</span>
                         <div className="text-xs text-orange-100">
-                          <p className="font-medium mb-1">System Action</p>
-                          <p>API server restart will disconnect all users temporarily.</p>
+                          <p className="font-medium mb-1">Session Reset</p>
+                          <p>This will reset your personal portfolio and settings to defaults.</p>
                         </div>
                       </div>
                     </div>
@@ -972,7 +1093,7 @@ const RemoteControlPanelClerk: React.FC = () => {
                       onClick={restartServer}
                       className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
                     >
-                      🔄 RESTART API SERVER
+                      🔄 RESET MY SESSION
                     </button>
                   </div>
                 </div>

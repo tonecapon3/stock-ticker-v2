@@ -24,7 +24,7 @@ export const getApiBaseUrl = (): string => {
   if (isLocalDevelopment) {
     // Development mode with no API URL configured: use local server
     console.log('🏠 Development mode: using local API server');
-    return 'http://localhost:3003';
+    return 'http://localhost:3001';
   } else {
     // No API server configured
     console.warn('⚠️ API server not configured. Using local-only mode.');
@@ -75,9 +75,30 @@ export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealt
   
   try {
     const healthUrl = buildApiUrl('/status/health');
+    // Import JWT headers function dynamically to avoid circular deps
+    let headers = { 'Content-Type': 'application/json' };
+    
+    try {
+      // Try to get JWT headers if available
+      const { tokenStorage } = await import('../auth/utils/index');
+      const token = tokenStorage.getAccessToken();
+      const sessionId = tokenStorage.getSessionId();
+      
+      if (token) {
+        headers = { ...headers, 'Authorization': `Bearer ${token}` };
+      }
+      
+      if (sessionId) {
+        headers = { ...headers, 'X-Session-ID': sessionId };
+      }
+    } catch (authError) {
+      // If auth utils aren't available, continue without auth headers
+      console.log('Auth utils not available for health check');
+    }
+    
     const response = await fetch(healthUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       signal: controller.signal,
     });
     

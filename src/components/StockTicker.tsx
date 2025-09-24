@@ -3,8 +3,11 @@ import { StockInfo, formatPrice } from '../lib/types';
 import { useTickerContext } from '../lib/context';
 
 // Utility function to format price changes
-const formatPriceChange = (percentageChange: number): string => {
-  return `${percentageChange >= 0 ? '+' : ''}${percentageChange.toFixed(2)}%`;
+const formatPriceChange = (percentChange: number | undefined | null): string => {
+  if (percentChange === undefined || percentChange === null || isNaN(percentChange)) {
+    return '0.00%';
+  }
+  return `${percentChange >= 0 ? '+' : ''}${percentChange.toFixed(2)}%`;
 };
 
 // Get appropriate classes for price changes - colors, animation, etc.
@@ -47,7 +50,7 @@ type StockTickerItemProps = {
 // Component for individual stock item in the list
 const StockTickerItem: React.FC<StockTickerItemProps> = ({ stock, isSelected, onSelect }) => {
   const { tickerState } = useTickerContext();
-  const { symbol, name, currentPrice, percentageChange, lastUpdated } = stock;
+  const { symbol, name, currentPrice, percentChange, lastUpdated } = stock;
   const { isPaused } = tickerState;
   const priceRef = useRef<HTMLSpanElement>(null);
   const [prevPrice, setPrevPrice] = useState<number>(currentPrice);
@@ -118,19 +121,19 @@ const StockTickerItem: React.FC<StockTickerItemProps> = ({ stock, isSelected, on
             {formatPrice(currentPrice, tickerState.selectedCurrency)}
           </span>
           
-          <div className={`flex items-center text-base ${getPriceChangeClasses(percentageChange)}`}>
-            {percentageChange > 0 ? (
+          <div className={`flex items-center text-base ${getPriceChangeClasses(percentChange || 0)}`}>
+            {(percentChange || 0) > 0 ? (
               <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
               </svg>
-            ) : percentageChange < 0 ? (
+            ) : (percentChange || 0) < 0 ? (
               <svg className="w-3 h-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             ) : (
               <span className="w-3 h-3 mr-1 inline-block">—</span>
             )}
-            <span>{formatPriceChange(percentageChange)}</span>
+            <span>{formatPriceChange(percentChange)}</span>
           </div>
         </div>
       </div>

@@ -71,17 +71,25 @@ export function setSecurityHeaders(config: SecurityConfig = DEFAULT_SECURITY_CON
     const existingCSP = document.querySelectorAll('meta[http-equiv="Content-Security-Policy"]');
     existingCSP.forEach(tag => tag.remove());
     
+    // In development, be more permissive or allow disabling CSP entirely
+    if (import.meta.env.DEV && import.meta.env.VITE_ENABLE_CSP === 'false') {
+      console.log('[SECURITY] CSP disabled in development mode');
+      return;
+    }
+    
     const cspPolicy = generateCSPPolicy(config.reportViolations);
     console.log('[SECURITY] Applying CSP policy:', cspPolicy);
     
     if (import.meta.env.DEV) {
-      console.log('[SECURITY] Development mode - CSP allows localhost connections');
+      console.log('[SECURITY] Development mode - CSP allows Clerk and localhost connections');
     }
     
     const metaCSP = document.createElement('meta');
     metaCSP.httpEquiv = 'Content-Security-Policy';
     metaCSP.content = cspPolicy;
     document.head.appendChild(metaCSP);
+  } else {
+    console.log('[SECURITY] CSP is disabled');
   }
 
   // Additional security meta tags
@@ -95,25 +103,28 @@ function generateCSPPolicy(reportViolations: boolean): string {
   // Allow connections to localhost API server in development
   const isDevelopment = import.meta.env.DEV;
   const connectSrc = isDevelopment 
-    ? "connect-src 'self' https: http://localhost:* ws://localhost:* wss://localhost:*" 
-    : "connect-src 'self' https:";
+    ? "connect-src 'self' https: http://localhost:* ws://localhost:* wss://localhost:* https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev" 
+    : "connect-src 'self' https: https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev";
+
+  // Allow Clerk-related domains for script loading
+  const scriptSrc = isDevelopment
+    ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev"
+    : "script-src 'self' 'unsafe-inline' https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev";
 
   const policies = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'", // Note: 'unsafe-*' needed for React dev
-    "style-src 'self' 'unsafe-inline'", // Needed for Tailwind and inline styles
+    scriptSrc, // Updated to allow Clerk scripts
+    "style-src 'self' 'unsafe-inline' https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev", // Allow Clerk styles
     "img-src 'self' data: https:",
-    "font-src 'self' data:",
+    "font-src 'self' data: https:",
     connectSrc,
-    "frame-ancestors 'none'",
+    "frame-src 'self' https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev", // Allow Clerk frames
     "base-uri 'self'",
-    "form-action 'self'",
+    "form-action 'self' https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev", // Allow Clerk form actions
   ];
 
-  if (reportViolations) {
-    // In development, log violations to console
-    policies.push("report-uri /csp-violation-report");
-  }
+  // Note: report-uri and frame-ancestors are ignored in meta tags, so we don't add them
+  // These should be set via HTTP headers on the server instead
 
   return policies.join('; ');
 }

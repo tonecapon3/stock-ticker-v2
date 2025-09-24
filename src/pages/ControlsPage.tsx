@@ -3,6 +3,7 @@ import { useClerk } from '@clerk/clerk-react';
 import { useTickerContext } from '../lib/context';
 import { StockInfo, Currency, CURRENCIES, formatPrice } from '../lib/types';
 import { shouldUseApiServer, buildApiUrl, API_ENDPOINTS } from '../lib/config';
+import Tooltip from '../components/Tooltip';
 
 // Add global style for select dropdowns
 // This is needed because select option styling is not consistently supported across browsers
@@ -61,6 +62,19 @@ const styleOptionsForDarkMode = () => {
         background: #374151; /* gray-700 */
         border-radius: 5px;
       }
+      
+      /* Volatility slider specific styling */
+      .volatility-slider {
+        background: linear-gradient(90deg, #10b981 0%, #f59e0b 50%, #ef4444 100%);
+      }
+      
+      .volatility-slider::-webkit-slider-thumb {
+        background: #fbbf24; /* yellow-400 */
+      }
+      
+      .volatility-slider::-moz-range-thumb {
+        background: #fbbf24; /* yellow-400 */
+      }
     `;
     document.head.appendChild(style);
   }
@@ -90,6 +104,9 @@ export default function ControlsPage() {
   
   // State for individual stock prices (for bulk update mode)
   const [individualStockPrices, setIndividualStockPrices] = useState<{[symbol: string]: string}>({});
+  
+  // State for volatility control
+  const [volatility, setVolatility] = useState<number>(2.0);
 
   // API Server status management
   const [serverStatus, setServerStatus] = useState<'online' | 'offline' | 'checking' | 'restarting'>('checking');
@@ -604,7 +621,17 @@ export default function ControlsPage() {
 
       {/* Update Speed Control */}
       <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
-        <h3 className="font-medium mb-3">Update Speed</h3>
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="font-medium">Update Speed</h3>
+          <Tooltip 
+            content="Controls how frequently stock prices update on the screen. Lower values (left) = faster updates with more CPU usage. Higher values (right) = smoother performance with slower updates. Recommended: 500-1000ms for balanced performance."
+            position="right"
+          >
+            <div className="inline-flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-blue-600 rounded-full cursor-help hover:bg-blue-500 transition-colors">
+              ?
+            </div>
+          </Tooltip>
+        </div>
         <div className="space-y-3">
           <input
             type="range"
@@ -619,6 +646,41 @@ export default function ControlsPage() {
             <span>Ultra Fast (0.1s)</span>
             <span>{updateIntervalMs}ms</span>
             <span>Smooth (5.0s)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Volatility Control */}
+      <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
+        <div className="flex items-center gap-2 mb-3">
+          <h3 className="font-medium">Market Volatility</h3>
+          <Tooltip 
+            content="Controls how much stock prices can change in each update. Lower values (left) = more stable, predictable price changes. Higher values (right) = more dramatic, realistic market swings. Affects all stocks in the simulation."
+            position="right"
+          >
+            <div className="inline-flex items-center justify-center w-4 h-4 text-xs font-bold text-white bg-blue-600 rounded-full cursor-help hover:bg-blue-500 transition-colors">
+              ?
+            </div>
+          </Tooltip>
+        </div>
+        <div className="space-y-3">
+          <input
+            type="range"
+            min="0.1"
+            max="5.0"
+            step="0.1"
+            value={volatility}
+            onChange={(e) => {
+              const newVolatility = parseFloat(e.target.value);
+              setVolatility(newVolatility);
+              console.log('Volatility changed to:', newVolatility);
+            }}
+            className="w-full volatility-slider"
+          />
+          <div className="flex justify-between text-sm text-gray-400">
+            <span>Stable (0.1%)</span>
+            <span className="text-yellow-400 font-medium">{volatility.toFixed(1)}%</span>
+            <span>Volatile (5.0%)</span>
           </div>
         </div>
       </div>
