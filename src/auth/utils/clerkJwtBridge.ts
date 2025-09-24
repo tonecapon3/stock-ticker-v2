@@ -6,6 +6,7 @@
  */
 
 import { tokenStorage } from './index';
+import { shouldUseApiServer, getApiBaseUrl } from '../../lib/config';
 
 // JWT server credentials for Clerk users
 // In a real app, you'd want a more sophisticated mapping
@@ -29,11 +30,22 @@ export async function authenticateWithJWTBridge(
   clerkToken?: string
 ): Promise<BridgeAuthResponse> {
   try {
+    // Check if API server is available
+    if (!shouldUseApiServer()) {
+      console.log('🔇 API server not configured, skipping JWT bridge');
+      return {
+        success: false,
+        error: 'API server not configured for JWT bridge'
+      };
+    }
+    
+    const apiBaseUrl = getApiBaseUrl();
     console.log('🌉 Starting JWT server authentication...');
     console.log('🔑 Using credentials:', { username: JWT_BRIDGE_CREDENTIALS.username });
+    console.log('🌐 API server:', apiBaseUrl);
     
     // Make JWT authentication request to your server
-    const response = await fetch('http://localhost:3001/api/remote/auth', {
+    const response = await fetch(`${apiBaseUrl}/api/remote/auth`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

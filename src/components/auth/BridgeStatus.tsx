@@ -7,6 +7,7 @@
 import React from 'react';
 import { useClerkJWTBridge } from '../../hooks/useClerkJWTBridge';
 import { useAuth } from '../../hooks/useAuth';
+import { shouldUseApiServer } from '../../lib/config';
 
 interface BridgeStatusProps {
   showWhenReady?: boolean;
@@ -18,12 +19,18 @@ export const BridgeStatus: React.FC<BridgeStatusProps> = ({
   className = ""
 }) => {
   const { isSignedIn } = useAuth();
-  const { isBridging, isBridged, bridgeError, isReadyForAPI } = useClerkJWTBridge();
-
+  
   // Don't show anything if user is not signed in with Clerk
   if (!isSignedIn) {
     return null;
   }
+  
+  // Don't show anything if API server is not configured
+  if (!shouldUseApiServer()) {
+    return null;
+  }
+  
+  const { isBridging, isBridged, bridgeError, isReadyForAPI } = useClerkJWTBridge();
 
   // Don't show anything if bridge is ready and showWhenReady is false
   if (isReadyForAPI && !showWhenReady) {

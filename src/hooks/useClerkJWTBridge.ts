@@ -8,6 +8,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAuth } from './useAuth';
 import { authenticateWithJWTBridge, clearJWTBridge, isJWTBridgeAuthenticated } from '../auth/utils/clerkJwtBridge';
+import { shouldUseApiServer } from '../lib/config';
 
 interface BridgeState {
   isBridging: boolean;
@@ -31,6 +32,16 @@ export const useJWTAuth = () => {
     const bridgeAuthentication = async () => {
       // Wait for Clerk to load before proceeding
       if (!isLoaded) {
+        return;
+      }
+      
+      // Don't attempt bridge if API server is not configured
+      if (!shouldUseApiServer()) {
+        setBridgeState({
+          isBridging: false,
+          isBridged: false,
+          error: null // No error - just not applicable
+        });
         return;
       }
       
