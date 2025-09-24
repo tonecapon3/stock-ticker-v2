@@ -816,11 +816,10 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     console.log('🔄 Attempting to fetch stocks from API...');
     try {
       const apiUrl = buildApiUrl(API_ENDPOINTS.STOCKS);
+      const headers = getJWTAuthHeaders();
       const response = await fetch(apiUrl, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       });
       
       console.log('📡 API Response status:', response.status);
@@ -967,11 +966,10 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     console.log('🔄 Attempting to fetch controls from API...');
     try {
       const apiUrl = buildApiUrl(API_ENDPOINTS.CONTROLS);
+      const headers = getJWTAuthHeaders();
       const response = await fetch(apiUrl, {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: headers,
       });
       
       console.log('📡 Controls API Response status:', response.status);
@@ -1029,10 +1027,23 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
    * Waits for Clerk-JWT bridge to be ready before syncing
    */
   useEffect(() => {
-    // No need to wait for JWT authentication for read-only API calls
-    // The server allows unauthenticated access for local sync operations
-    
     console.log('🔄 Setting up API sync...');
+    console.log('🔗 JWT Bridge Status:', { isBridging, isBridged, isReadyForAPI, bridgeError });
+    
+    // Wait for JWT bridge to be ready if API server is configured
+    if (shouldUseApiServer() && !isReadyForAPI) {
+      if (isBridging) {
+        console.log('⏳ Waiting for JWT bridge authentication to complete...');
+        return;
+      }
+      if (bridgeError) {
+        console.error('❌ JWT bridge error:', bridgeError);
+        console.warn('💡 Application will run in local-only mode due to auth error');
+        return;
+      }
+      // If not bridging and not ready, skip for now
+      return;
+    }
     
     // Check API health first
     const initializeApiSync = async () => {
@@ -1045,28 +1056,37 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
         } else {
           console.warn(`⚠️ API server health check failed: ${healthCheck.error}`);
           console.warn('💡 Application will run in local-only mode');
+          return;
         }
       }
       
       // Initial fetch from API (will gracefully fail if unhealthy)
-      fetchStocksFromAPI();
-      fetchControlsFromAPI();
+      if (isReadyForAPI) {
+        console.log('🚀 JWT bridge is ready, starting API sync...');
+        fetchStocksFromAPI();
+        fetchControlsFromAPI();
+      }
     };
     
     initializeApiSync();
     
-    // Set up periodic sync with API server
-    const apiSyncInterval = setInterval(() => {
-      console.log('⏰ Periodic API sync triggered');
-      fetchStocksFromAPI();
-      fetchControlsFromAPI();
-    }, 5000); // Sync every 5 seconds to reduce server load
+    // Set up periodic sync with API server only if authenticated
+    let apiSyncInterval: NodeJS.Timeout | null = null;
+    if (isReadyForAPI) {
+      apiSyncInterval = setInterval(() => {
+        console.log('⏰ Periodic API sync triggered (authenticated)');
+        fetchStocksFromAPI();
+        fetchControlsFromAPI();
+      }, 5000); // Sync every 5 seconds to reduce server load
+    }
     
     return () => {
-      console.log('🛑 Cleaning up API sync interval');
-      clearInterval(apiSyncInterval);
+      if (apiSyncInterval) {
+        console.log('🛑 Cleaning up API sync interval');
+        clearInterval(apiSyncInterval);
+      }
     };
-  }, [fetchStocksFromAPI, fetchControlsFromAPI]);
+  }, [fetchStocksFromAPI, fetchControlsFromAPI, isBridging, isBridged, isReadyForAPI, bridgeError]);
 
   /**
    * Effect to update prices randomly on an interval
