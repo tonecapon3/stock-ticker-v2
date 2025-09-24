@@ -4,8 +4,10 @@
 
 ### Frontend (AWS Amplify)
 - **Production URL**: `https://main.d7lc7dqjkvbj3.amplifyapp.com`
+- **Staging URL**: `https://staging.dv565hju499c6.amplifyapp.com`
 - **Platform**: AWS Amplify
 - **Status**: ✅ Active
+- **Session Isolation**: ✅ Configured (separate instances)
 - **Last Updated**: September 2024
 
 ### Backend API (Render)
@@ -29,7 +31,8 @@ VITE_API_BASE_URL=http://localhost:3002
 ### For Production API Server (Render Environment Variables)
 ```bash
 # Must be set in Render dashboard
-REMOTE_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://main.d7lc7dqjkvbj3.amplifyapp.com
+# IMPORTANT: Add your staging URL to fix CORS errors
+REMOTE_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,https://main.d7lc7dqjkvbj3.amplifyapp.com,https://staging.dv565hju499c6.amplifyapp.com
 NODE_ENV=production
 ```
 
