@@ -107,6 +107,43 @@ export const tokenStorage = {
   },
 
   /**
+   * Store access token (alias for JWT token)
+   */
+  setAccessToken: (token: string): void => {
+    tokenStorage.setJWTToken(token);
+  },
+
+  /**
+   * Get access token (alias for JWT token)
+   */
+  getAccessToken: (): string | null => {
+    return tokenStorage.getJWTToken();
+  },
+
+  /**
+   * Get session ID from localStorage
+   */
+  getSessionId: (): string | null => {
+    try {
+      return localStorage.getItem('jwt_session_id');
+    } catch (error) {
+      console.error('Failed to retrieve session ID:', error);
+      return null;
+    }
+  },
+
+  /**
+   * Set session ID in localStorage
+   */
+  setSessionId: (sessionId: string): void => {
+    try {
+      localStorage.setItem('jwt_session_id', sessionId);
+    } catch (error) {
+      console.error('Failed to store session ID:', error);
+    }
+  },
+
+  /**
    * Clear all stored authentication data
    */
   clearAll: (): void => {
@@ -114,6 +151,8 @@ export const tokenStorage = {
       localStorage.removeItem(JWT_TOKEN_KEY);
       localStorage.removeItem(AUTH_METHOD_KEY);
       localStorage.removeItem(USER_DATA_KEY);
+      localStorage.removeItem('jwt_session_id');
+      localStorage.removeItem('jwt_refresh_token');
     } catch (error) {
       console.error('Failed to clear auth storage:', error);
     }

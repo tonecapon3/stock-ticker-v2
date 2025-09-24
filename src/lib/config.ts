@@ -11,8 +11,11 @@ export const getApiBaseUrl = (): string => {
       apiUrl.trim() !== '' && 
       (apiUrl.startsWith('https://') || apiUrl.startsWith('http://'))) {
     
-    console.log(`🌐 API server configured: ${apiUrl.replace(/\/+$/, '')}`);
-    return apiUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    const cleanUrl = apiUrl.replace(/\/+$/, ''); // Remove trailing slashes
+    if (import.meta.env.DEV) {
+      console.log(`🌐 API server configured: ${cleanUrl}`);
+    }
+    return cleanUrl;
   }
   
   // Check if we're in local development without API URL configured
@@ -26,10 +29,11 @@ export const getApiBaseUrl = (): string => {
     console.log('🏠 Development mode: using local API server');
     return 'http://localhost:3001';
   } else {
-    // No API server configured
-    console.warn('⚠️ API server not configured. Using local-only mode.');
-    console.warn('💡 Set VITE_API_BASE_URL to your deployed API server URL.');
-    return '';
+    // Production without API URL - use production default
+    const productionDefault = 'https://stock-ticker-v2.onrender.com';
+    console.log(`🏭 Production mode: using default API server: ${productionDefault}`);
+    console.log('💡 Set VITE_API_BASE_URL to override this default.');
+    return productionDefault;
   }
 };
 
@@ -63,7 +67,7 @@ export const isDevelopment = (): boolean => {
          window.location.hostname === '127.0.0.1';
 };
 
-// API Health Check
+// API Health Check with JWT bridge support
 export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealthy: boolean, error?: string, responseTime?: number}> => {
   if (!shouldUseApiServer()) {
     return { isHealthy: false, error: 'API server not configured' };
@@ -74,30 +78,47 @@ export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealt
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   
   try {
-    const healthUrl = buildApiUrl('/status/health');
-    // Import JWT headers function dynamically to avoid circular deps
+    // First try a simple health check without authentication
+    const baseUrl = getApiBaseUrl();
+    let healthUrl;
     let headers = { 'Content-Type': 'application/json' };
     
+    // Try to get JWT headers if available
+    let hasAuth = false;
     try {
-      // Try to get JWT headers if available
       const { tokenStorage } = await import('../auth/utils/index');
-      const token = tokenStorage.getAccessToken();
-      const sessionId = tokenStorage.getSessionId();
+      const { isJWTBridgeAuthenticated } = await import('../auth/utils/clerkJwtBridge');
       
-      if (token) {
-        headers = { ...headers, 'Authorization': `Bearer ${token}` };
-      }
-      
-      if (sessionId) {
-        headers = { ...headers, 'X-Session-ID': sessionId };
+      if (isJWTBridgeAuthenticated()) {
+        const token = tokenStorage.getAccessToken();
+        const sessionId = tokenStorage.getSessionId();
+        
+        if (token) {
+          headers = { ...headers, 'Authorization': `Bearer ${token}` };
+          hasAuth = true;
+        }
+        
+        if (sessionId) {
+          headers = { ...headers, 'X-Session-ID': sessionId };
+        }
       }
     } catch (authError) {
-      // If auth utils aren't available, continue without auth headers
-      console.log('Auth utils not available for health check');
+      // Auth utils not available, continue without auth headers
+      if (import.meta.env.DEV) {
+        console.log('Auth utils not available for health check');
+      }
+    }
+    
+    // Use authenticated endpoint if we have auth, otherwise try stocks endpoint
+    if (hasAuth) {
+      healthUrl = `${baseUrl}/api/remote/stocks`;
+    } else {
+      // Try the base API endpoint for a simple connectivity test
+      healthUrl = `${baseUrl}/api/remote/status`;
     }
     
     const response = await fetch(healthUrl, {
-      method: 'POST',
+      method: 'GET',
       headers,
       signal: controller.signal,
     });
@@ -105,13 +126,30 @@ export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealt
     clearTimeout(timeoutId);
     const responseTime = Date.now() - startTime;
     
-    if (response.ok) {
-      const data = await response.json();
+    // If we get a 401, the server is healthy but we need authentication
+    if (response.status === 401) {
       return {
-        isHealthy: data.health === 'healthy',
+        isHealthy: true, // Server is responding, just needs auth
         responseTime,
-        error: data.health !== 'healthy' ? 'API server unhealthy' : undefined
+        error: 'API server healthy but requires authentication'
       };
+    }
+    
+    if (response.ok) {
+      try {
+        const data = await response.json();
+        return {
+          isHealthy: data.success !== false,
+          responseTime,
+          error: data.success === false ? data.error || 'API returned error' : undefined
+        };
+      } catch (jsonError) {
+        // Response was OK but not JSON, still consider healthy
+        return {
+          isHealthy: true,
+          responseTime
+        };
+      }
     } else {
       return {
         isHealthy: false,

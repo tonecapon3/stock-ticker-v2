@@ -177,19 +177,24 @@ function getJWTAuthHeaders(): Record<string, string> {
   
   // Check if we have JWT bridge authentication (for Clerk users)
   if (isJWTBridgeAuthenticated()) {
+    console.log('🔗 Using JWT bridge headers for authentication');
     return getJWTBridgeHeaders();
   }
   
   // Fallback to direct JWT token storage
-  const token = tokenStorage.getJWTToken();
-  const sessionId = localStorage.getItem('jwt_session_id');
+  const token = tokenStorage.getJWTToken() || tokenStorage.getAccessToken();
+  const sessionId = tokenStorage.getSessionId();
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    console.log('🔑 Using direct JWT token for authentication:', `Bearer ${token.substring(0, 20)}...`);
+  } else {
+    console.warn('⚠️ No JWT token available - API calls will fail with 401');
   }
   
   if (sessionId) {
     headers['X-Session-ID'] = sessionId;
+    console.log('📋 Using session ID:', sessionId);
   }
   
   return headers;

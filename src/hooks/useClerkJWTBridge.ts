@@ -132,19 +132,33 @@ export const useJWTAuth = () => {
     bridgeAuthentication();
   }, [isLoaded, isSignedIn, user, getToken]);
 
-  // Auto-retry bridge on error after delay
+  // Auto-retry bridge on error after delay (but with exponential backoff)
   useEffect(() => {
-    if (bridgeState.error && isSignedIn && isLoaded) {
+    if (bridgeState.error && isLoaded && shouldUseApiServer()) {
+      // Calculate retry delay with exponential backoff
+      const baseDelay = 3000; // 3 seconds
+      const maxDelay = 30000; // 30 seconds max
+      const attempt = parseInt(localStorage.getItem('jwt_bridge_retry_count') || '0');
+      const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+      
+      console.log(`🔄 Scheduling JWT bridge retry in ${delay}ms (attempt ${attempt + 1})`);
+      
       const retryTimer = setTimeout(() => {
+        console.log('🔄 Retrying JWT bridge authentication...');
+        localStorage.setItem('jwt_bridge_retry_count', (attempt + 1).toString());
+        
         setBridgeState(prev => ({
           ...prev,
           error: null
         }));
-      }, 5000); // Retry after 5 seconds
+      }, delay);
 
       return () => clearTimeout(retryTimer);
+    } else if (bridgeState.isBridged && !bridgeState.error) {
+      // Reset retry count on successful authentication
+      localStorage.removeItem('jwt_bridge_retry_count');
     }
-  }, [bridgeState.error, isSignedIn, isLoaded]);
+  }, [bridgeState.error, bridgeState.isBridged, isLoaded]);
 
   return {
     isBridging: bridgeState.isBridging,

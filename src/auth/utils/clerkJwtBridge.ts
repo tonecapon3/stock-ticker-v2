@@ -65,23 +65,33 @@ export async function authenticateWithJWTBridge(
     if (data.success && data.token) {
       // Store JWT credentials for API calls using correct method names
       tokenStorage.setJWTToken(data.token);
+      tokenStorage.setAccessToken(data.token); // Also store as access token for compatibility
       
       // Generate a session ID if not provided by server
       const sessionId = data.user?.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      localStorage.setItem('jwt_session_id', sessionId);
+      tokenStorage.setSessionId(sessionId);
       
       if (data.refreshToken) {
         localStorage.setItem('jwt_refresh_token', data.refreshToken);
       }
       
+      // Store authentication method and timestamp
+      tokenStorage.setAuthMethod('jwt');
+      localStorage.setItem('jwt_bridge_authenticated_at', Date.now().toString());
+      
       console.log('✅ JWT Bridge authentication successful');
+      console.log('🔑 Token stored:', data.token.substring(0, 20) + '...');
+      console.log('📋 Session ID:', sessionId);
+      
       return {
         success: true,
         token: data.token,
         sessionId: sessionId
       };
     } else {
-      throw new Error(data.error || 'JWT Bridge authentication failed');
+      const errorMessage = data.error || 'JWT Bridge authentication failed';
+      console.error('❌ JWT Bridge auth failed:', errorMessage);
+      throw new Error(errorMessage);
     }
   } catch (error) {
     console.error('❌ JWT Bridge authentication failed:', error);
@@ -99,6 +109,8 @@ export function clearJWTBridge(): void {
   tokenStorage.removeJWTToken();
   localStorage.removeItem('jwt_session_id');
   localStorage.removeItem('jwt_refresh_token');
+  localStorage.removeItem('jwt_bridge_authenticated_at');
+  tokenStorage.clearAll(); // Clear all auth-related storage
   console.log('🧹 JWT Bridge authentication cleared');
 }
 
@@ -106,9 +118,28 @@ export function clearJWTBridge(): void {
  * Check if JWT bridge is authenticated
  */
 export function isJWTBridgeAuthenticated(): boolean {
-  const token = tokenStorage.getJWTToken();
-  const sessionId = localStorage.getItem('jwt_session_id');
-  return !!(token && sessionId);
+  const token = tokenStorage.getJWTToken() || tokenStorage.getAccessToken();
+  const sessionId = tokenStorage.getSessionId();
+  const authenticatedAt = localStorage.getItem('jwt_bridge_authenticated_at');
+  
+  if (!token || !sessionId) {
+    return false;
+  }
+  
+  // Check if authentication is not too old (24 hours)
+  if (authenticatedAt) {
+    const authTime = parseInt(authenticatedAt);
+    const now = Date.now();
+    const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+    
+    if (now - authTime > maxAge) {
+      console.log('🕑 JWT bridge authentication expired, clearing...');
+      clearJWTBridge();
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 /**
@@ -119,15 +150,21 @@ export function getJWTBridgeHeaders(): Record<string, string> {
     'Content-Type': 'application/json',
   };
   
-  const token = tokenStorage.getJWTToken();
-  const sessionId = localStorage.getItem('jwt_session_id');
+  const token = tokenStorage.getJWTToken() || tokenStorage.getAccessToken();
+  const sessionId = tokenStorage.getSessionId();
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
+    console.log('🔑 Adding Authorization header:', `Bearer ${token.substring(0, 20)}...`);
+  } else {
+    console.warn('⚠️ No JWT token available for authentication headers');
   }
   
   if (sessionId) {
     headers['X-Session-ID'] = sessionId;
+    console.log('📋 Adding Session ID header:', sessionId);
+  } else {
+    console.warn('⚠️ No session ID available for authentication headers');
   }
   
   return headers;
