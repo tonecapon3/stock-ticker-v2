@@ -62,17 +62,23 @@ export async function authenticateWithJWTBridge(
     const data = await response.json();
     console.log('📄 JWT auth response data:', { success: data.success, hasToken: !!data.token, hasSessionId: !!data.user?.sessionId });
 
-    if (data.success && data.token && data.user?.sessionId) {
+    if (data.success && data.token) {
       // Store JWT credentials for API calls using correct method names
       tokenStorage.setJWTToken(data.token);
-      localStorage.setItem('jwt_session_id', data.user.sessionId);
-      localStorage.setItem('jwt_refresh_token', data.refreshToken);
+      
+      // Generate a session ID if not provided by server
+      const sessionId = data.user?.sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      localStorage.setItem('jwt_session_id', sessionId);
+      
+      if (data.refreshToken) {
+        localStorage.setItem('jwt_refresh_token', data.refreshToken);
+      }
       
       console.log('✅ JWT Bridge authentication successful');
       return {
         success: true,
         token: data.token,
-        sessionId: data.user.sessionId
+        sessionId: sessionId
       };
     } else {
       throw new Error(data.error || 'JWT Bridge authentication failed');
