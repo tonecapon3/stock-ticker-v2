@@ -38,14 +38,7 @@ NEW_APP_JSON=$(aws amplify create-app $AWS_PROFILE_FLAG \
     --description "Stock Ticker Staging Instance with Session Isolation" \
     --repository "https://github.com/tonecapon3/stock-ticker-v2" \
     --platform WEB \
-    --iam-service-role-arn "arn:aws:iam::$(aws sts get-caller-identity $AWS_PROFILE_FLAG --query Account --output text):role/amplifyconsole-backend-role" \
-    --environment-variables \
-        NODE_ENV=production \
-        VITE_ENFORCE_HTTPS=true \
-        VITE_ENABLE_HSTS=true \
-        VITE_ENABLE_CSP=true \
-        VITE_INSTANCE_ID=staging \
-        VITE_SESSION_DOMAIN=staging \
+    --environment-variables '{"NODE_ENV":"production","VITE_ENFORCE_HTTPS":"true","VITE_ENABLE_HSTS":"true","VITE_ENABLE_CSP":"true","VITE_INSTANCE_ID":"staging","VITE_SESSION_DOMAIN":"staging"}' \
     --enable-branch-auto-build)
 
 # Extract the new App ID
@@ -63,18 +56,7 @@ aws amplify create-branch $AWS_PROFILE_FLAG \
     --branch-name staging \
     --description "Staging environment with session isolation" \
     --enable-auto-build \
-    --environment-variables \
-        VITE_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY \
-        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=$VITE_CLERK_PUBLISHABLE_KEY \
-        CLERK_SECRET_KEY=$CLERK_SECRET_KEY \
-        VITE_API_BASE_URL=$VITE_API_BASE_URL \
-        VITE_DEBUG_MODE=$VITE_DEBUG_MODE \
-        VITE_LOG_LEVEL=$VITE_LOG_LEVEL \
-        VITE_INSTANCE_ID=$VITE_INSTANCE_ID \
-        VITE_SESSION_DOMAIN=$VITE_SESSION_DOMAIN \
-        VITE_ENFORCE_HTTPS=$VITE_ENFORCE_HTTPS \
-        VITE_ENABLE_HSTS=$VITE_ENABLE_HSTS \
-        VITE_ENABLE_CSP=$VITE_ENABLE_CSP
+    --environment-variables "{\"VITE_CLERK_PUBLISHABLE_KEY\":\"$VITE_CLERK_PUBLISHABLE_KEY\",\"NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY\":\"$VITE_CLERK_PUBLISHABLE_KEY\",\"CLERK_SECRET_KEY\":\"$CLERK_SECRET_KEY\",\"VITE_API_BASE_URL\":\"$VITE_API_BASE_URL\",\"VITE_DEBUG_MODE\":\"$VITE_DEBUG_MODE\",\"VITE_LOG_LEVEL\":\"$VITE_LOG_LEVEL\",\"VITE_INSTANCE_ID\":\"$VITE_INSTANCE_ID\",\"VITE_SESSION_DOMAIN\":\"$VITE_SESSION_DOMAIN\",\"VITE_ENFORCE_HTTPS\":\"$VITE_ENFORCE_HTTPS\",\"VITE_ENABLE_HSTS\":\"$VITE_ENABLE_HSTS\",\"VITE_ENABLE_CSP\":\"$VITE_ENABLE_CSP\"}"
 
 echo "✅ Created staging branch deployment"
 
