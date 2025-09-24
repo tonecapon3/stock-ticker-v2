@@ -462,6 +462,44 @@ app.get('/api/remote/session-info', requireAuthWithFallback, enrichUserInfo, (re
   }
 });
 
+// Root route - API status
+app.get('/', (req, res) => {
+  res.json({
+    name: 'Stock Ticker API',
+    version: '2.0.0-instance-isolated',
+    status: 'running',
+    endpoints: {
+      health: '/api/health',
+      legacyHealth: '/status/health',
+      stocks: '/api/remote/stocks',
+      controls: '/api/remote/controls',
+      sessionInfo: '/api/remote/session-info'
+    },
+    features: [
+      'Instance-based data isolation',
+      'Clerk authentication with fallback',
+      'User-specific data storage',
+      'Automatic session cleanup'
+    ],
+    timestamp: new Date().toISOString()
+  });
+});
+
+// API info endpoint
+app.get('/api', (req, res) => {
+  res.json({
+    name: 'Stock Ticker API v2.0.0',
+    instanceIsolation: true,
+    authentication: clerkClient ? 'enabled' : 'disabled',
+    endpoints: {
+      health: 'GET /api/health',
+      stocks: 'GET /api/remote/stocks',
+      controls: 'GET /api/remote/controls',
+      sessionInfo: 'GET /api/remote/session-info'
+    }
+  });
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log('🚀 Stock Ticker API Server Started (Instance Isolated)');
