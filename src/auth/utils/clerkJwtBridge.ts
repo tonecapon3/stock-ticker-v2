@@ -12,7 +12,7 @@ import { shouldUseApiServer, getApiBaseUrl } from '../../lib/config';
 // In a real app, you'd want a more sophisticated mapping
 const JWT_BRIDGE_CREDENTIALS = {
   username: 'admin', // Default JWT username for Clerk users
-  password: 'admin123' // Default JWT password for Clerk users
+  password: 'AdminSecure2025!@' // Updated JWT password for Clerk users
 };
 
 interface BridgeAuthResponse {
