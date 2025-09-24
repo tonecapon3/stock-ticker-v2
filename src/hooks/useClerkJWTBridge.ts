@@ -92,7 +92,7 @@ export const useJWTAuth = () => {
         // Get Clerk token if available
         const clerkToken = isSignedIn ? await getToken() : undefined;
         
-        // Bridge to JWT server
+        // Bridge to JWT server (always authenticate, even for anonymous users)
         const bridgeResult = await authenticateWithJWTBridge(
           user?.id || 'anonymous', 
           clerkToken || undefined
@@ -110,6 +110,7 @@ export const useJWTAuth = () => {
             console.log('✅ Anonymous JWT authentication established successfully');
           }
         } else {
+          console.error('❌ JWT bridge failed:', bridgeResult.error);
           setBridgeState({
             isBridging: false,
             isBridged: false,
@@ -129,6 +130,7 @@ export const useJWTAuth = () => {
       }
     };
 
+    // Trigger authentication immediately when Clerk loads, regardless of sign-in status
     bridgeAuthentication();
   }, [isLoaded, isSignedIn, user, getToken]);
 

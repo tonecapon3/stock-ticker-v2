@@ -1029,6 +1029,38 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   }, [safelyUpdateState]);
 
   /**
+   * Effect to ensure immediate JWT bridge authentication
+   */
+  useEffect(() => {
+    const ensureAuthentication = async () => {
+      // Only run if API server is configured and we're not already bridged
+      if (!shouldUseApiServer()) {
+        return;
+      }
+      
+      try {
+        const { isJWTBridgeAuthenticated, authenticateWithJWTBridge } = await import('../auth/utils/clerkJwtBridge');
+        
+        if (!isJWTBridgeAuthenticated()) {
+          console.log('🔐 Context: Ensuring JWT bridge authentication...');
+          const authResult = await authenticateWithJWTBridge('context-init');
+          
+          if (authResult.success) {
+            console.log('✅ Context: JWT bridge authentication successful');
+          } else {
+            console.error('❌ Context: JWT bridge authentication failed:', authResult.error);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Context: Failed to initialize JWT bridge:', error);
+      }
+    };
+    
+    // Run authentication check immediately
+    ensureAuthentication();
+  }, []);
+
+  /**
    * Effect to sync with API server periodically
    * Waits for Clerk-JWT bridge to be ready before syncing
    */

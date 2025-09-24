@@ -78,17 +78,17 @@ export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealt
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   
   try {
-    // First try a simple health check without authentication
     const baseUrl = getApiBaseUrl();
-    let healthUrl;
+    
+    // Step 1: First, try to authenticate with the JWT bridge if not already authenticated
+    let hasAuth = false;
     let headers = { 'Content-Type': 'application/json' };
     
-    // Try to get JWT headers if available
-    let hasAuth = false;
     try {
       const { tokenStorage } = await import('../auth/utils/index');
-      const { isJWTBridgeAuthenticated } = await import('../auth/utils/clerkJwtBridge');
+      const { isJWTBridgeAuthenticated, authenticateWithJWTBridge } = await import('../auth/utils/clerkJwtBridge');
       
+      // Check if we're already authenticated
       if (isJWTBridgeAuthenticated()) {
         const token = tokenStorage.getAccessToken();
         const sessionId = tokenStorage.getSessionId();
@@ -101,20 +101,32 @@ export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealt
         if (sessionId) {
           headers = { ...headers, 'X-Session-ID': sessionId };
         }
+      } else {
+        // Try to authenticate for health check
+        console.log('🔐 Health check: Attempting to authenticate...');
+        const authResult = await authenticateWithJWTBridge('health-check');
+        
+        if (authResult.success && authResult.token) {
+          headers = { ...headers, 'Authorization': `Bearer ${authResult.token}` };
+          if (authResult.sessionId) {
+            headers = { ...headers, 'X-Session-ID': authResult.sessionId };
+          }
+          hasAuth = true;
+          console.log('✅ Health check: Authentication successful');
+        }
       }
     } catch (authError) {
-      // Auth utils not available, continue without auth headers
-      if (import.meta.env.DEV) {
-        console.log('Auth utils not available for health check');
-      }
+      console.log('⚠️ Health check: Authentication not available, testing connectivity only');
     }
     
-    // Use authenticated endpoint if we have auth, otherwise try stocks endpoint
+    // Step 2: Test the API endpoint
+    let healthUrl;
     if (hasAuth) {
+      // Use stocks endpoint to test authenticated access
       healthUrl = `${baseUrl}/api/remote/stocks`;
     } else {
-      // Try the base API endpoint for a simple connectivity test
-      healthUrl = `${baseUrl}/api/remote/status`;
+      // Just test basic connectivity by trying to get a 401 response (which means server is up)
+      healthUrl = `${baseUrl}/api/remote/stocks`;
     }
     
     const response = await fetch(healthUrl, {
@@ -126,12 +138,13 @@ export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealt
     clearTimeout(timeoutId);
     const responseTime = Date.now() - startTime;
     
-    // If we get a 401, the server is healthy but we need authentication
+    // Handle different response scenarios
     if (response.status === 401) {
+      // Server is healthy, just requires authentication (expected for unauthenticated requests)
       return {
-        isHealthy: true, // Server is responding, just needs auth
+        isHealthy: true,
         responseTime,
-        error: 'API server healthy but requires authentication'
+        error: hasAuth ? 'Authentication failed' : undefined // No error if we expected 401
       };
     }
     
@@ -150,11 +163,19 @@ export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealt
           responseTime
         };
       }
+    } else if (response.status >= 400 && response.status < 500) {
+      // Client errors (4xx) usually mean server is up but there's an issue with the request
+      return {
+        isHealthy: true, // Server is responding
+        responseTime,
+        error: `Client error: HTTP ${response.status}`
+      };
     } else {
+      // Server errors (5xx) or other issues
       return {
         isHealthy: false,
         responseTime,
-        error: `HTTP ${response.status}: ${response.statusText}`
+        error: `Server error: HTTP ${response.status}: ${response.statusText}`
       };
     }
   } catch (error) {
@@ -165,7 +186,8 @@ export const checkApiHealth = async (timeoutMs: number = 5000): Promise<{isHealt
       if (error.name === 'AbortError') {
         return { isHealthy: false, responseTime, error: `Timeout after ${timeoutMs}ms` };
       }
-      return { isHealthy: false, responseTime, error: error.message };
+      // Network errors usually mean server is down
+      return { isHealthy: false, responseTime, error: `Connection failed: ${error.message}` };
     }
     
     return { isHealthy: false, responseTime, error: 'Unknown error occurred' };
