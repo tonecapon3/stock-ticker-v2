@@ -9,8 +9,9 @@ env:
   # Branch-specific environment variables
   main:
     variables:
-      VITE_CLERK_PUBLISHABLE_KEY: $VITE_CLERK_PUBLISHABLE_KEY
-      VITE_API_BASE_URL: $VITE_API_BASE_URL
+      VITE_CLERK_PUBLISHABLE_KEY: pk_test_d29ya2FibGUtbWFydGluLTAuY2xlcmsuYWNjb3VudHMuZGV2JA
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_d29ya2FibGUtbWFydGluLTAuY2xlcmsuYWNjb3VudHMuZGV2JA
+      CLERK_SECRET_KEY: sk_test_SThTzDsbXHbUr9wjn1srdFmnMXTrkeAxCu5gOif5uW
       VITE_DEBUG_MODE: "false"
       VITE_LOG_LEVEL: "warn"
   develop:
