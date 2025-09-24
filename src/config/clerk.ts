@@ -25,6 +25,10 @@ if (isPlaceholderKey) {
   );
 }
 
+// Get instance-specific configuration
+const instanceId = import.meta.env.VITE_INSTANCE_ID || 'default';
+const sessionDomain = import.meta.env.VITE_SESSION_DOMAIN || 'default';
+
 // Clerk configuration object
 export const clerkConfig = {
   publishableKey,
@@ -36,6 +40,10 @@ export const clerkConfig = {
   afterSignInUrl: '/remote-control',
   afterSignUpUrl: '/remote-control',
   afterSignOutUrl: '/sign-in',
+  
+  // Instance-specific session isolation
+  sessionDomain: sessionDomain,
+  storageKey: `clerk-session-${instanceId}`,
   
   // Enable multiple sessions (allows switching between accounts)
   signInMode: 'auto',
@@ -114,4 +122,44 @@ export const redirectUrls = {
   signUp: '/',
   afterSignIn: '/',
   afterSignUp: '/',
+};
+
+// Session isolation utilities
+export const sessionUtils = {
+  instanceId,
+  sessionDomain,
+  
+  // Get instance-specific localStorage key
+  getStorageKey: (key: string) => `${instanceId}_${key}`,
+  
+  // Clear instance-specific session data
+  clearInstanceSession: () => {
+    if (typeof window !== 'undefined') {
+      // Clear only keys that belong to this instance
+      const keysToRemove = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith(`${instanceId}_`) || key.startsWith('clerk-session-'))) {
+          keysToRemove.push(key);
+        }
+      }
+      keysToRemove.forEach(key => localStorage.removeItem(key));
+      
+      // Also clear sessionStorage for this instance
+      for (let i = 0; i < sessionStorage.length; i++) {
+        const key = sessionStorage.key(i);
+        if (key && key.startsWith(`${instanceId}_`)) {
+          sessionStorage.removeItem(key);
+        }
+      }
+    }
+  },
+  
+  // Get current instance info for debugging
+  getInstanceInfo: () => ({
+    instanceId,
+    sessionDomain,
+    currentOrigin: typeof window !== 'undefined' ? window.location.origin : 'unknown',
+    storageKey: `clerk-session-${instanceId}`
+  })
 };
