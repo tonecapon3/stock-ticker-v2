@@ -319,8 +319,11 @@ export default function ControlsPage() {
         setServerStatus('offline');
         setServerInfo({
           lastCheck: new Date(),
-          error: 'API server disabled in production environment'
+          error: 'Frontend-only mode - No API server required'
         });
+        console.log('%cℹ️ Production Mode: Frontend-Only', 'color: #60a5fa; font-weight: bold');
+        console.log('%cAPI Server Status: ⭕ Not Required', 'color: #60a5fa');
+        console.log('%cLocal stock simulation active - no backend dependency', 'color: #9ca3af');
         return;
       }
       
@@ -525,7 +528,7 @@ export default function ControlsPage() {
           <span>🖥️ API Server Status</span>
           <div className={`inline-block w-3 h-3 rounded-full ${
             serverStatus === 'online' ? 'bg-green-400 animate-pulse' :
-            serverStatus === 'offline' ? 'bg-red-400' :
+            serverStatus === 'offline' ? (serverInfo.error?.includes('Frontend-only mode') ? 'bg-blue-400' : 'bg-red-400') :
             serverStatus === 'checking' ? 'bg-yellow-400 animate-pulse' :
             'bg-orange-400 animate-spin'
           }`}></div>
@@ -538,12 +541,12 @@ export default function ControlsPage() {
                 <span className="text-sm font-medium text-gray-300">Status:</span>
                 <span className={`text-sm font-bold ${
                   serverStatus === 'online' ? 'text-green-400' :
-                  serverStatus === 'offline' ? 'text-red-400' :
+                  serverStatus === 'offline' ? (serverInfo.error?.includes('Frontend-only mode') ? 'text-blue-400' : 'text-red-400') :
                   serverStatus === 'checking' ? 'text-yellow-400' :
                   'text-orange-400'
                 }`}>
                   {serverStatus === 'online' ? '🟢 Online' :
-                   serverStatus === 'offline' ? '🔴 Offline' :
+                   serverStatus === 'offline' ? (serverInfo.error?.includes('Frontend-only mode') ? '🏠 Frontend-Only' : '🔴 Offline') :
                    serverStatus === 'checking' ? '🟡 Checking...' :
                    '🟠 Restarting...'}
                 </span>
@@ -556,8 +559,10 @@ export default function ControlsPage() {
               )}
               
               {serverInfo.error && (
-                <div className="text-xs text-red-400">
-                  Error: {serverInfo.error}
+                <div className={`text-xs ${
+                  serverInfo.error.includes('Frontend-only mode') ? 'text-blue-400' : 'text-red-400'
+                }`}>
+                  {serverInfo.error.includes('Frontend-only mode') ? 'Mode:' : 'Error:'} {serverInfo.error}
                 </div>
               )}
               
