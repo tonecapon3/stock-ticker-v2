@@ -1,22 +1,19 @@
 import express from 'express';
 import cors from 'cors';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import { fileURLToPath } from 'url';
-import path from 'path';
 import dotenv from 'dotenv';
+import { clerkMiddleware, requireAuth, getAuth } from '@clerk/express';
+import { createClerkClient } from '@clerk/backend';
 
 // Price history generation utilities
-function generateFakePriceHistory(basePrice, pointsCount = 30, intervalSeconds = 15, volatilityPercent = 2.0) {
+function generateFakePriceHistory(basePrice, pointsCount = 30, intervalSeconds = 15) {
   const priceHistory = [];
   const now = new Date();
   
   for (let i = pointsCount - 1; i >= 0; i--) {
     const timestamp = new Date(now.getTime() - (i * intervalSeconds * 1000));
     
-    // Generate realistic price variation using the volatility parameter
-    const maxVariation = volatilityPercent / 100; // Convert percentage to decimal
-    const randomVariation = (Math.random() - 0.5) * 2 * maxVariation;
+    // Generate realistic price variation
+    const randomVariation = (Math.random() - 0.5) * 2 * 0.03; // 3% max variation
     
     // Apply smoothing with previous point
     let priceVariation = randomVariation;
@@ -43,19 +40,12 @@ function generateRealisticPriceChange(currentPrice, maxChangePercent = 2) {
   const randomFactor = Math.random();
   let changePercent;
   
-  // Scale the change ranges based on the maxChangePercent (volatility)
-  const smallChangeRange = maxChangePercent * 0.25; // 25% of max for small changes
-  const mediumChangeRange = maxChangePercent * 0.75; // 75% of max for medium changes
-  
   if (randomFactor < 0.7) {
-    // 70% of changes are small
-    changePercent = (Math.random() - 0.5) * smallChangeRange * 2;
+    changePercent = (Math.random() - 0.5) * 1.0; // Small changes
   } else if (randomFactor < 0.9) {
-    // 20% are medium changes
-    changePercent = (Math.random() - 0.5) * mediumChangeRange * 2;
+    changePercent = (Math.random() - 0.5) * 3.0; // Medium changes
   } else {
-    // 10% are large changes (up to max volatility)
-    changePercent = (Math.random() - 0.5) * maxChangePercent * 2;
+    changePercent = (Math.random() - 0.5) * maxChangePercent * 2; // Large changes
   }
   
   const newPrice = currentPrice * (1 + changePercent / 100);
@@ -65,46 +55,37 @@ function generateRealisticPriceChange(currentPrice, maxChangePercent = 2) {
 // Load environment variables based on NODE_ENV
 if (process.env.NODE_ENV === 'production') {
   console.log('🔧 Production mode: Using Railway environment variables');
-  // In production (Railway), environment variables are already loaded
-  // No need to load from file
 } else {
   console.log('🔧 Development mode: Loading from .env.local');
   dotenv.config({ path: '.env.local' });
 }
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 const PORT = process.env.PORT || process.env.REMOTE_PORT || 3001;
 
-// Security Configuration - All secrets from environment variables
-const JWT_SECRET = process.env.REMOTE_JWT_SECRET;
-const API_KEY = process.env.REMOTE_API_KEY;
+// Clerk Configuration
+const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
+const CLERK_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 const ALLOWED_ORIGINS = (process.env.REMOTE_ALLOWED_ORIGINS || 'http://localhost:3000').split(',');
+
+// Initialize Clerk client
+let clerkClient;
+if (CLERK_SECRET_KEY && !CLERK_SECRET_KEY.includes('your-actual-secret-key-here') && 
+    CLERK_PUBLISHABLE_KEY && !CLERK_PUBLISHABLE_KEY.includes('your-publishable-key-here')) {
+  clerkClient = createClerkClient({ secretKey: CLERK_SECRET_KEY });
+  console.log('🔐 Clerk authentication initialized');
+} else {
+  console.warn('⚠️  Clerk keys not configured - authentication will be disabled');
+}
 
 // Debug: Log environment variable status
 console.log('🔍 Environment Variables Check:');
 console.log('  NODE_ENV:', process.env.NODE_ENV);
 console.log('  PORT:', process.env.PORT);
 console.log('  REMOTE_PORT:', process.env.REMOTE_PORT);
-console.log('  JWT_SECRET:', JWT_SECRET ? '✅ SET (' + JWT_SECRET.length + ' chars)' : '❌ MISSING');
-console.log('  API_KEY:', API_KEY ? '✅ SET' : '❌ MISSING');
+console.log('  CLERK_SECRET_KEY:', CLERK_SECRET_KEY ? '✅ SET (' + CLERK_SECRET_KEY.substring(0, 10) + '...)' : '❌ MISSING');
+console.log('  CLERK_PUBLISHABLE_KEY:', CLERK_PUBLISHABLE_KEY ? '✅ SET (' + CLERK_PUBLISHABLE_KEY.substring(0, 10) + '...)' : '❌ MISSING');
 console.log('  ALLOWED_ORIGINS:', ALLOWED_ORIGINS.length, 'origins');
-
-// Validate required environment variables
-if (!JWT_SECRET || JWT_SECRET.length < 32) {
-  console.error('❌ REMOTE_JWT_SECRET is required and must be at least 32 characters');
-  console.error('   Current value:', JWT_SECRET ? 'SET but too short' : 'NOT SET');
-  console.error('Generate one with: openssl rand -base64 32');
-  process.exit(1);
-}
-
-if (!API_KEY) {
-  console.error('❌ REMOTE_API_KEY is required for additional security');
-  console.error('Generate one with: openssl rand -base64 24');
-  process.exit(1);
-}
 
 // Enable CORS for frontend with environment-based origins
 app.use(cors({
@@ -114,46 +95,33 @@ app.use(cors({
 
 app.use(express.json());
 
-// User management from environment variables
-// In production, use a proper database
-const USERS = [
-  {
-    id: 1,
-    username: process.env.REMOTE_ADMIN_USERNAME || 'admin',
-    password: process.env.REMOTE_ADMIN_PASSWORD_HASH || '$2a$10$defaultHashChangeInProduction',
-    role: 'admin'
-  },
-  {
-    id: 2,
-    username: process.env.REMOTE_CONTROLLER_USERNAME || 'controller',
-    password: process.env.REMOTE_CONTROLLER_PASSWORD_HASH || '$2a$10$defaultHashChangeInProduction',
-    role: 'controller'
+// 🔑 INSTANCE DETECTION MIDDLEWARE
+// This is the key component that enables instance-based data isolation
+app.use((req, res, next) => {
+  const origin = req.get('origin') || req.get('referer') || '';
+  
+  // Detect instance from origin URL
+  if (origin.includes('staging.dv565hju499c6.amplifyapp.com')) {
+    req.instanceId = 'staging';
+  } else if (origin.includes('main.d7lc7dqjkvbj3.amplifyapp.com')) {
+    req.instanceId = 'production';
+  } else if (origin.includes('localhost')) {
+    req.instanceId = 'development';
+  } else {
+    req.instanceId = 'unknown';
   }
-];
+  
+  console.log(`📍 Request from instance: ${req.instanceId} (${origin})`);
+  next();
+});
 
-// Validate user configuration
-if (process.env.NODE_ENV === 'production') {
-  if (!process.env.REMOTE_ADMIN_PASSWORD_HASH || process.env.REMOTE_ADMIN_PASSWORD_HASH.includes('default')) {
-    console.error('❌ REMOTE_ADMIN_PASSWORD_HASH must be set in production');
-    console.error('Generate one with: node -e "console.log(require("bcryptjs").hashSync("your-password", 10))"');
-    process.exit(1);
-  }
-  if (!process.env.REMOTE_CONTROLLER_PASSWORD_HASH || process.env.REMOTE_CONTROLLER_PASSWORD_HASH.includes('default')) {
-    console.error('❌ REMOTE_CONTROLLER_PASSWORD_HASH must be set in production');
-    console.error('Generate one with: node -e "console.log(require("bcryptjs").hashSync("your-password", 10))"');
-    process.exit(1);
-  }
+// Clerk middleware for authentication
+if (clerkClient && CLERK_PUBLISHABLE_KEY) {
+  app.use(clerkMiddleware({
+    publishableKey: CLERK_PUBLISHABLE_KEY,
+    secretKey: CLERK_SECRET_KEY
+  }));
 }
-
-// Mock system state
-let systemState = {
-  isPaused: false,
-  updateIntervalMs: 1000, // 1 second for smoother updates
-  selectedCurrency: 'USD',
-  volatility: 2.0, // Default volatility at 2.0%
-  lastUpdated: new Date(),
-  isEmergencyStopped: false
-};
 
 // Mock stock data with rich price history - synchronized with frontend
 const defaultStockData = [
@@ -162,883 +130,357 @@ const defaultStockData = [
   { symbol: 'MSFT', name: 'Microsoft Corporation', basePrice: 415.20 },
 ];
 
-// Initialize stocks with rich price history
-let stocksData = defaultStockData.map(stock => {
-  const priceHistory = generateFakePriceHistory(stock.basePrice, 30, 15, systemState.volatility);
-  const mostRecentPrice = priceHistory[priceHistory.length - 1].price;
-  
-  return {
-    symbol: stock.symbol,
-    name: stock.name,
-    currentPrice: mostRecentPrice,
-    previousPrice: priceHistory.length > 1 ? priceHistory[priceHistory.length - 2].price : mostRecentPrice,
-    initialPrice: stock.basePrice,
-    percentageChange: ((mostRecentPrice - stock.basePrice) / stock.basePrice) * 100,
-    lastUpdated: new Date(),
-    priceHistory: priceHistory,
-  };
-});
+// 🏗️ INSTANCE + USER SPECIFIC DATA STORAGE
+// Key format: "userId_instanceId" for complete isolation
+const userSessions = new Map(); // Key: userId_instanceId -> userData
 
-// Middleware to verify JWT token
-function verifyToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
-  }
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
-    next();
+// Initialize default user data
+function createDefaultUserData() {
+  const stocksData = defaultStockData.map(stock => {
+    const priceHistory = generateFakePriceHistory(stock.basePrice, 30, 15);
+    const mostRecentPrice = priceHistory[priceHistory.length - 1].price;
+    
+    return {
+      symbol: stock.symbol,
+      name: stock.name,
+      currentPrice: mostRecentPrice,
+      previousPrice: priceHistory.length > 1 ? priceHistory[priceHistory.length - 2].price : mostRecentPrice,
+      initialPrice: stock.basePrice,
+      percentageChange: ((mostRecentPrice - stock.basePrice) / stock.basePrice) * 100,
+      lastUpdated: new Date(),
+      priceHistory: priceHistory,
+    };
   });
+
+  return {
+    stocks: stocksData,
+    systemState: {
+      isPaused: false,
+      updateIntervalMs: 1000, // 1 second for smoother updates
+      selectedCurrency: 'USD',
+      lastUpdated: new Date(),
+      isEmergencyStopped: false
+    },
+    lastActivity: Date.now()
+  };
 }
 
-// Special middleware for local sync operations (no auth required)
-function allowLocalSync(req, res, next) {
-  const authHeader = req.headers['authorization'];
+// Get or create user session data with instance isolation
+function getUserData(userId, instanceId) {
+  const sessionKey = `${userId}_${instanceId}`;
   
-  if (!authHeader) {
-    // Local sync request - no authentication required
-    req.user = { id: 0, username: 'local-sync', role: 'read-only' };
-    req.isLocalSync = true;
+  if (!userSessions.has(sessionKey)) {
+    console.log(`👤 Creating new session for user: ${userId} on instance: ${instanceId}`);
+    userSessions.set(sessionKey, createDefaultUserData());
+  }
+  
+  // Update last activity timestamp
+  const userData = userSessions.get(sessionKey);
+  userData.lastActivity = Date.now();
+  
+  return userData;
+}
+
+// Clean up inactive user sessions (older than 2 hours)
+function cleanupInactiveSessions() {
+  const maxInactiveTime = 2 * 60 * 60 * 1000; // 2 hours
+  const now = Date.now();
+  
+  for (const [sessionKey, userData] of userSessions.entries()) {
+    if (now - userData.lastActivity > maxInactiveTime) {
+      console.log(`🧞 Cleaning up inactive session: ${sessionKey}`);
+      userSessions.delete(sessionKey);
+    }
+  }
+}
+
+// Run cleanup every 30 minutes
+setInterval(cleanupInactiveSessions, 30 * 60 * 1000);
+
+// LEGACY GLOBAL DATA (kept for backward compatibility with unauthenticated access)
+// Each instance gets its own demo data
+const instanceDemoData = new Map(); // instanceId -> demoData
+
+function getInstanceDemoData(instanceId) {
+  if (!instanceDemoData.has(instanceId)) {
+    console.log(`📊 Creating demo data for instance: ${instanceId}`);
+    
+    const stocksData = defaultStockData.map(stock => {
+      const priceHistory = generateFakePriceHistory(stock.basePrice, 30, 15);
+      const mostRecentPrice = priceHistory[priceHistory.length - 1].price;
+      
+      return {
+        symbol: stock.symbol,
+        name: stock.name,
+        currentPrice: mostRecentPrice,
+        previousPrice: priceHistory.length > 1 ? priceHistory[priceHistory.length - 2].price : mostRecentPrice,
+        initialPrice: stock.basePrice,
+        percentageChange: ((mostRecentPrice - stock.basePrice) / stock.basePrice) * 100,
+        lastUpdated: new Date(),
+        priceHistory: priceHistory,
+      };
+    });
+
+    instanceDemoData.set(instanceId, {
+      stocks: stocksData,
+      systemState: {
+        isPaused: false,
+        updateIntervalMs: 1000,
+        selectedCurrency: 'USD',
+        lastUpdated: new Date(),
+        isEmergencyStopped: false
+      }
+    });
+  }
+  
+  return instanceDemoData.get(instanceId);
+}
+
+// User cache to prevent rate limiting
+const userCache = new Map();
+const USER_CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+// Function to get cached user or fetch from Clerk
+async function getCachedUser(userId) {
+  const cached = userCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < USER_CACHE_TTL) {
+    return cached.user;
+  }
+
+  try {
+    const user = await clerkClient.users.getUser(userId);
+    userCache.set(userId, {
+      user,
+      timestamp: Date.now()
+    });
+    return user;
+  } catch (error) {
+    console.error('Error fetching user from Clerk:', error);
+    throw error;
+  }
+}
+
+// Clean up expired cache entries periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [userId, cached] of userCache.entries()) {
+    if (now - cached.timestamp >= USER_CACHE_TTL) {
+      userCache.delete(userId);
+    }
+  }
+}, USER_CACHE_TTL); // Clean up every 5 minutes
+
+// Custom middleware to handle authentication for API routes
+function requireAuthWithFallback(req, res, next) {
+  if (!clerkClient) {
+    // If Clerk is not configured, allow requests but mark as unauthenticated
+    req.user = { id: 'anonymous', username: 'anonymous', role: 'read-only' };
+    req.isUnauthenticated = true;
     return next();
   }
-  
-  // If auth header exists, verify it normally
-  return verifyToken(req, res, next);
+
+  // Use Clerk's requireAuth for authenticated routes
+  return requireAuth()(req, res, next);
 }
 
-// Authentication endpoints
-app.post('/api/remote/auth', async (req, res) => {
+// Custom middleware to get user information from Clerk with caching
+async function enrichUserInfo(req, res, next) {
+  if (req.isUnauthenticated) {
+    return next();
+  }
+
   try {
-    const { username, password } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
+    const auth = getAuth(req);
+    if (auth.userId && clerkClient) {
+      // Use cached user data to prevent rate limiting
+      const user = await getCachedUser(auth.userId);
+      
+      // Extract user information
+      req.user = {
+        id: auth.userId,
+        username: user.username || user.emailAddresses[0]?.emailAddress || 'user',
+        email: user.emailAddresses[0]?.emailAddress,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        // All authenticated users get admin privileges
+        role: 'admin',
+        clerkUser: user
+      };
     }
-
-    const user = USERS.find(u => u.username === username);
-    if (!user) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const isValidPassword = await bcrypt.compare(password, user.password);
-    if (!isValidPassword) {
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
-
-    res.json({
-      success: true,
-      token,
-      user: {
-        id: user.id,
-        username: user.username,
-        role: user.role
-      }
-    });
+    next();
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-app.get('/api/remote/auth', verifyToken, (req, res) => {
-  res.json({
-    authenticated: true,
-    user: {
-      id: req.user.id,
-      username: req.user.username,
-      role: req.user.role
+    console.error('Error enriching user info:', error);
+    
+    // Handle rate limiting gracefully
+    if (error.status === 429) {
+      console.warn('⚠️ Clerk rate limit reached, using basic auth info');
     }
-  });
-});
-
-// Stock endpoints
-app.get('/api/remote/stocks', (req, res) => {
-  // Allow unauthenticated read access for main app synchronization
-  const authHeader = req.headers['authorization'];
-  const isAuthenticated = authHeader && authHeader.startsWith('Bearer ');
-  
-  const response = {
-    success: true,
-    stocks: stocksData,
-    meta: {
-      count: stocksData.length,
-      lastUpdated: new Date(),
-    }
-  };
-  
-  // Add user info if authenticated (for remote control panel)
-  if (isAuthenticated) {
-    try {
-      const token = authHeader.split(' ')[1];
-      const user = jwt.verify(token, JWT_SECRET);
-      response.meta.requestedBy = user.username;
-    } catch (err) {
-      // Ignore auth errors for read-only access
-    }
-  }
-  
-  res.json(response);
-});
-
-app.post('/api/remote/stocks', verifyToken, (req, res) => {
-  try {
-    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
-
-    const { symbol, name, initialPrice } = req.body;
-
-    if (!symbol || !name || typeof initialPrice !== 'number') {
-      return res.status(400).json({ error: 'Symbol, name, and initial price are required' });
-    }
-
-    if (!/^[A-Z]{1,5}$/.test(symbol)) {
-      return res.status(400).json({ error: 'Symbol must be 1-5 uppercase letters' });
-    }
-
-    if (initialPrice <= 0 || initialPrice > 1000000) {
-      return res.status(400).json({ error: 'Price must be between 0.01 and 1,000,000' });
-    }
-
-    if (stocksData.some(stock => stock.symbol === symbol)) {
-      return res.status(409).json({ error: 'Stock with this symbol already exists' });
-    }
-
-    const newStock = {
-      symbol: symbol.toUpperCase(),
-      name: name.trim(),
-      currentPrice: initialPrice,
-      previousPrice: initialPrice,
-      initialPrice: initialPrice,
-      percentageChange: 0,
-      lastUpdated: new Date(),
-      priceHistory: [{ timestamp: new Date(), price: initialPrice }],
+    
+    // Don't fail the request, just continue with basic auth info
+    req.user = {
+      id: getAuth(req).userId || 'unknown',
+      username: 'user',
+      role: 'admin' // Still grant admin role for authenticated users
     };
-
-    stocksData.push(newStock);
-
-    res.status(201).json({
-      success: true,
-      stock: newStock,
-      message: `Stock ${symbol} added successfully`,
-      addedBy: req.user.username
-    });
-  } catch (error) {
-    console.error('Error adding stock:', error);
-    res.status(500).json({ error: 'Failed to add stock' });
+    next();
   }
-});
+}
 
-// Bulk price update endpoint
-app.put('/api/remote/stocks/bulk', verifyToken, (req, res) => {
-  try {
-    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
-
-    const { updates, updateType, percentage } = req.body;
-
-    if (!updates && !updateType) {
-      return res.status(400).json({ error: 'Either updates array or updateType is required' });
-    }
-
-    let updatedStocks = [];
-    const changes = [];
-
-    if (updateType) {
-      // Bulk update all stocks with a pattern
-      stocksData.forEach((stock, index) => {
-        let newPrice;
-        const currentPrice = stock.currentPrice;
-
-        switch (updateType) {
-          case 'percentage':
-            const pct = percentage || 0;
-            newPrice = currentPrice * (1 + pct / 100);
-            break;
-          case 'random':
-          case 'simulate':
-            // Random fluctuation using current volatility setting
-            const maxVariation = systemState.volatility; // Use current volatility
-            const randomPct = (Math.random() - 0.5) * 2 * maxVariation; // -volatility% to +volatility%
-            newPrice = currentPrice * (1 + randomPct / 100);
-            break;
-          case 'reset':
-            newPrice = stock.initialPrice;
-            break;
-          case 'market_crash':
-          case 'bear':
-            newPrice = currentPrice * 0.8; // 20% drop
-            break;
-          case 'market_boom':
-          case 'bull':
-            newPrice = currentPrice * 1.2; // 20% increase
-            break;
-          default:
-            newPrice = currentPrice;
-        }
-
-        // Ensure price is within bounds
-        newPrice = Math.max(0.01, Math.min(1000000, newPrice));
-        
-        if (newPrice !== currentPrice) {
-          const previousPrice = stock.currentPrice;
-          stock.previousPrice = previousPrice;
-          stock.currentPrice = newPrice;
-          stock.percentageChange = ((newPrice - previousPrice) / previousPrice) * 100;
-          stock.lastUpdated = new Date();
-          
-          stock.priceHistory.push({
-            timestamp: new Date(),
-            price: newPrice
-          });
-
-          if (stock.priceHistory.length > 30) {
-            stock.priceHistory.shift();
-          }
-
-          changes.push(`${stock.symbol}: ${previousPrice.toFixed(2)} → ${newPrice.toFixed(2)}`);
-          updatedStocks.push(stock.symbol);
-        }
-      });
-    } else if (updates && Array.isArray(updates)) {
-      // Individual stock updates
-      updates.forEach(update => {
-        const { symbol, price } = update;
-        if (!symbol || typeof price !== 'number') {
-          return; // Skip invalid updates
-        }
-
-        const stockIndex = stocksData.findIndex(s => s.symbol.toUpperCase() === symbol.toUpperCase());
-        if (stockIndex !== -1) {
-          const stock = stocksData[stockIndex];
-          
-          if (price <= 0 || price > 1000000) {
-            return; // Skip invalid prices
-          }
-
-          const previousPrice = stock.currentPrice;
-          stock.previousPrice = previousPrice;
-          stock.currentPrice = price;
-          stock.percentageChange = ((price - previousPrice) / previousPrice) * 100;
-          stock.lastUpdated = new Date();
-          
-          stock.priceHistory.push({
-            timestamp: new Date(),
-            price: price
-          });
-
-          if (stock.priceHistory.length > 30) {
-            stock.priceHistory.shift();
-          }
-
-          changes.push(`${symbol}: ${previousPrice.toFixed(2)} → ${price.toFixed(2)}`);
-          updatedStocks.push(symbol);
-        }
-      });
-    }
-
-    if (changes.length === 0) {
-      return res.status(400).json({ error: 'No valid updates were processed' });
-    }
-
-    res.json({
-      success: true,
-      message: `Bulk update completed for ${updatedStocks.length} stocks`,
-      updatedStocks,
-      changes,
-      updateType: updateType || 'individual',
-      updatedBy: req.user.username,
-      timestamp: new Date()
-    });
-  } catch (error) {
-    console.error('Error in bulk update:', error);
-    res.status(500).json({ error: 'Failed to perform bulk update' });
-  }
-});
-
-app.put('/api/remote/stocks/:symbol', verifyToken, (req, res) => {
-  try {
-    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
-
-    const { symbol } = req.params;
-    const { price, name } = req.body;
-
-    const stockIndex = stocksData.findIndex(s => s.symbol.toUpperCase() === symbol.toUpperCase());
-    
-    if (stockIndex === -1) {
-      return res.status(404).json({ error: 'Stock not found' });
-    }
-
-    const stock = stocksData[stockIndex];
-    let updated = false;
-    const changes = [];
-
-    if (price !== undefined) {
-      if (typeof price !== 'number' || price <= 0 || price > 1000000) {
-        return res.status(400).json({ error: 'Price must be a number between 0.01 and 1,000,000' });
-      }
-
-      const previousPrice = stock.currentPrice;
-      stock.previousPrice = previousPrice;
-      stock.currentPrice = price;
-      stock.percentageChange = ((price - previousPrice) / previousPrice) * 100;
-      stock.lastUpdated = new Date();
-      
-      stock.priceHistory.push({
-        timestamp: new Date(),
-        price: price
-      });
-
-      if (stock.priceHistory.length > 30) {
-        stock.priceHistory.shift();
-      }
-
-      changes.push(`price updated from ${previousPrice} to ${price}`);
-      updated = true;
-    }
-
-    if (name !== undefined) {
-      if (typeof name !== 'string' || name.trim().length === 0) {
-        return res.status(400).json({ error: 'Name must be a non-empty string' });
-      }
-
-      const oldName = stock.name;
-      stock.name = name.trim();
-      changes.push(`name updated from "${oldName}" to "${stock.name}"`);
-      updated = true;
-    }
-
-    if (!updated) {
-      return res.status(400).json({ error: 'No valid update fields provided' });
-    }
-
-    stocksData[stockIndex] = stock;
-
-    res.json({
-      success: true,
-      stock,
-      changes,
-      updatedBy: req.user.username,
-      timestamp: new Date()
-    });
-  } catch (error) {
-    console.error('Error updating stock:', error);
-    res.status(500).json({ error: 'Failed to update stock' });
-  }
-});
-
-app.delete('/api/remote/stocks/:symbol', verifyToken, (req, res) => {
-  try {
-    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
-
-    const { symbol } = req.params;
-    const stockIndex = stocksData.findIndex(s => s.symbol.toUpperCase() === symbol.toUpperCase());
-    
-    if (stockIndex === -1) {
-      return res.status(404).json({ error: 'Stock not found' });
-    }
-
-    const deletedStock = stocksData[stockIndex];
-    stocksData.splice(stockIndex, 1);
-
-    res.json({
-      success: true,
-      message: `Stock ${symbol} deleted successfully`,
-      deletedStock,
-      deletedBy: req.user.username,
-      timestamp: new Date()
-    });
-  } catch (error) {
-    console.error('Error deleting stock:', error);
-    res.status(500).json({ error: 'Failed to delete stock' });
-  }
-});
-
-// Controls endpoints
-app.get('/api/remote/controls', (req, res) => {
-  // Check if this is a local sync request (no auth required)
-  const authHeader = req.headers.authorization;
-  let user = null;
-  let isLocalSync = false;
-  
-  if (!authHeader) {
-    // Allow unauthenticated access for local sync
-    isLocalSync = true;
-    console.debug('🏠 Local controls sync request detected');
-  } else {
-    // Verify token for authenticated requests
-    try {
-      const token = authHeader.replace('Bearer ', '');
-      user = jwt.verify(token, JWT_SECRET);
-    } catch (error) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
-    }
-  }
-  
+// Health check endpoint (no auth required)
+app.get('/api/health', (req, res) => {
   res.json({
-    success: true,
-    controls: systemState,
-    requestedBy: user ? user.username : 'local-sync',
-    isLocalSync,
-    timestamp: new Date()
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    authentication: clerkClient ? 'clerk' : 'disabled',
+    version: '2.0.0-instance-isolated',
+    totalSessions: userSessions.size,
+    instancesActive: instanceDemoData.size
   });
 });
 
-app.put('/api/remote/controls', verifyToken, (req, res) => {
-  try {
-    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
-
-    const updates = req.body;
-    const changes = [];
-
-    if (updates.isPaused !== undefined) {
-      if (typeof updates.isPaused !== 'boolean') {
-        return res.status(400).json({ error: 'isPaused must be a boolean' });
-      }
-      
-      const oldState = systemState.isPaused;
-      systemState.isPaused = updates.isPaused;
-      changes.push(`Ticker ${updates.isPaused ? 'paused' : 'resumed'} (was ${oldState ? 'paused' : 'running'})`);
-    }
-
-    if (updates.updateIntervalMs !== undefined) {
-      if (typeof updates.updateIntervalMs !== 'number' || updates.updateIntervalMs < 50 || updates.updateIntervalMs > 10000) {
-        return res.status(400).json({ error: 'updateIntervalMs must be a number between 50 and 10000' });
-      }
-      
-      const oldInterval = systemState.updateIntervalMs;
-      systemState.updateIntervalMs = updates.updateIntervalMs;
-      changes.push(`Update interval changed from ${oldInterval}ms to ${updates.updateIntervalMs}ms`);
-    }
-
-    if (updates.selectedCurrency !== undefined) {
-      if (typeof updates.selectedCurrency !== 'string') {
-        return res.status(400).json({ error: 'selectedCurrency must be a string' });
-      }
-      
-      // Validate currency code (basic validation)
-      const validCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'CHF', 'INR'];
-      if (!validCurrencies.includes(updates.selectedCurrency)) {
-        return res.status(400).json({ error: `selectedCurrency must be one of: ${validCurrencies.join(', ')}` });
-      }
-      
-      const oldCurrency = systemState.selectedCurrency;
-      systemState.selectedCurrency = updates.selectedCurrency;
-      changes.push(`Currency changed from ${oldCurrency} to ${updates.selectedCurrency}`);
-    }
-
-    if (updates.volatility !== undefined) {
-      if (typeof updates.volatility !== 'number' || updates.volatility < 0.1 || updates.volatility > 5.0) {
-        return res.status(400).json({ error: 'volatility must be a number between 0.1 and 5.0' });
-      }
-      
-      const oldVolatility = systemState.volatility;
-      systemState.volatility = updates.volatility;
-      changes.push(`Volatility changed from ${oldVolatility}% to ${updates.volatility}%`);
-    }
-
-    if (updates.emergencyStop !== undefined) {
-      if (typeof updates.emergencyStop !== 'boolean') {
-        return res.status(400).json({ error: 'emergencyStop must be a boolean' });
-      }
-      
-      systemState.isEmergencyStopped = updates.emergencyStop;
-      systemState.isPaused = updates.emergencyStop;
-      changes.push(`Emergency stop ${updates.emergencyStop ? 'activated' : 'deactivated'}`);
-    }
-
-    if (changes.length === 0) {
-      return res.status(400).json({ error: 'No valid update fields provided' });
-    }
-
-    systemState.lastUpdated = new Date();
-    
-    // Update market simulation with new settings
-    updateMarketSimulation();
-
-    res.json({
-      success: true,
-      controls: systemState,
-      changes,
-      updatedBy: req.user.username,
-      timestamp: new Date()
-    });
-  } catch (error) {
-    console.error('Error updating controls:', error);
-    res.status(500).json({ error: 'Failed to update controls' });
-  }
-});
-
-// Pause/Resume endpoints (simplified, no additional validation required)
-app.post('/api/remote/controls/pause', verifyToken, (req, res) => {
-  try {
-    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
-
-    const wasPaused = systemState.isPaused;
-    systemState.isPaused = true;
-    systemState.lastUpdated = new Date();
-    
-    // Update market simulation with new settings
-    updateMarketSimulation();
-
-    res.json({
-      success: true,
-      message: wasPaused ? 'System was already paused' : 'System paused successfully',
-      controls: systemState,
-      changes: [wasPaused ? 'System was already paused' : 'System paused'],
-      updatedBy: req.user.username,
-      timestamp: new Date()
-    });
-  } catch (error) {
-    console.error('Error pausing system:', error);
-    res.status(500).json({ error: 'Failed to pause system' });
-  }
-});
-
-app.post('/api/remote/controls/resume', verifyToken, (req, res) => {
-  try {
-    if (req.user.role !== 'controller' && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Insufficient permissions' });
-    }
-
-    const wasPaused = systemState.isPaused;
-    systemState.isPaused = false;
-    systemState.isEmergencyStopped = false; // Resume also clears emergency stop
-    systemState.lastUpdated = new Date();
-    
-    // Update market simulation with new settings
-    updateMarketSimulation();
-
-    res.json({
-      success: true,
-      message: wasPaused ? 'System resumed successfully' : 'System was already running',
-      controls: systemState,
-      changes: [wasPaused ? 'System resumed' : 'System was already running'],
-      updatedBy: req.user.username,
-      timestamp: new Date()
-    });
-  } catch (error) {
-    console.error('Error resuming system:', error);
-    res.status(500).json({ error: 'Failed to resume system' });
-  }
-});
-
-// Emergency stop endpoint
-app.post('/api/remote/controls/emergency', verifyToken, (req, res) => {
-  try {
-    systemState.isEmergencyStopped = true;
-    systemState.isPaused = true;
-    systemState.lastUpdated = new Date();
-
-    res.json({
-      success: true,
-      message: 'Emergency stop activated',
-      controls: systemState,
-      triggeredBy: req.user.username,
-      timestamp: new Date()
-    });
-  } catch (error) {
-    console.error('Error triggering emergency stop:', error);
-    res.status(500).json({ error: 'Failed to trigger emergency stop' });
-  }
-});
-
-// Status endpoints
-app.get('/api/remote/status', verifyToken, (req, res) => {
-  const uptime = process.uptime() * 1000;
-  
-  const statusResponse = {
-    timestamp: new Date(),
-    uptime: {
-      milliseconds: uptime,
-      seconds: Math.floor(uptime / 1000),
-      minutes: Math.floor(uptime / (1000 * 60)),
-      hours: Math.floor(uptime / (1000 * 60 * 60)),
-      formatted: formatUptime(uptime)
-    },
-    server: {
-      nodeVersion: process.version,
-      platform: process.platform,
-      arch: process.arch,
-      pid: process.pid
-    },
-    health: {
-      status: 'healthy',
-      checks: {
-        api: 'ok',
-        authentication: 'ok',
-        storage: 'ok'
-      }
-    },
-    user: {
-      username: req.user.username,
-      role: req.user.role,
-      requestTime: new Date()
-    }
-  };
-
-  res.json({
-    success: true,
-    status: statusResponse
-  });
-});
-
-app.post('/api/remote/status/health', (req, res) => {
-  const startTime = Date.now();
-  
-  const healthChecks = {
-    api: 'ok',
-    responseTime: Date.now() - startTime,
-    timestamp: new Date(),
-    version: '1.0.0'
-  };
-
-  res.json({
-    success: true,
-    health: 'healthy',
-    checks: healthChecks
-  });
-});
-
-// GET endpoint for health check (used by Render health checks)
-app.get('/api/remote/status/health', (req, res) => {
-  const startTime = Date.now();
-  
-  const healthChecks = {
-    api: 'ok',
-    responseTime: Date.now() - startTime,
-    timestamp: new Date(),
-    version: '1.0.0'
-  };
-
-  res.json({
-    success: true,
-    health: 'healthy',
-    checks: healthChecks
-  });
-});
-
-// Frontend-compatible health check endpoints (without /api/remote prefix)
-// POST /status/health - used by frontend health checks
-app.post('/status/health', (req, res) => {
-  const startTime = Date.now();
-  
-  const healthChecks = {
-    api: 'ok',
-    responseTime: Date.now() - startTime,
-    timestamp: new Date(),
-    version: '1.0.0',
-    server: 'stock-ticker-backend'
-  };
-
-  res.json({
-    success: true,
-    health: 'healthy',
-    checks: healthChecks
-  });
-});
-
-// GET /status/health - additional compatibility endpoint
+// Legacy health check endpoint for render.yaml compatibility
 app.get('/status/health', (req, res) => {
-  const startTime = Date.now();
-  
-  const healthChecks = {
-    api: 'ok',
-    responseTime: Date.now() - startTime,
-    timestamp: new Date(),
-    version: '1.0.0',
-    server: 'stock-ticker-backend'
-  };
-
   res.json({
     success: true,
     health: 'healthy',
-    checks: healthChecks
+    checks: {
+      api: 'ok',
+      responseTime: 0,
+      timestamp: new Date().toISOString(),
+      version: '2.0.0-instance-isolated',
+      server: 'stock-ticker-backend-isolated'
+    }
   });
 });
 
-// Server restart endpoint
-app.post('/api/remote/restart', verifyToken, (req, res) => {
+// 📊 INSTANCE-ISOLATED STOCK ENDPOINTS
+app.get('/api/remote/stocks', requireAuthWithFallback, enrichUserInfo, (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only admins can restart the server' });
+    let stocks, isUserSpecific = false;
+    const instanceId = req.instanceId || 'unknown';
+    
+    if (req.isUnauthenticated) {
+      // Unauthenticated users get instance-specific demo data
+      const demoData = getInstanceDemoData(instanceId);
+      stocks = demoData.stocks;
+      console.log(`👥 Serving ${instanceId} demo data to unauthenticated user`);
+    } else {
+      // Authenticated users get their own isolated data per instance
+      const userData = getUserData(req.user.id, instanceId);
+      stocks = userData.stocks;
+      isUserSpecific = true;
+      console.log(`🔒 Serving ${instanceId} data to user: ${req.user.username} (${stocks.length} stocks)`);
+    }
+    
+    const response = {
+      success: true,
+      stocks: stocks,
+      meta: {
+        count: stocks.length,
+        lastUpdated: new Date(),
+        authRequired: false,
+        userSpecific: isUserSpecific,
+        instanceId: instanceId,
+        userId: req.isUnauthenticated ? null : req.user.id,
+        sessionKey: req.isUnauthenticated ? null : `${req.user.id}_${instanceId}`
+      }
+    };
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching stocks:', error);
+    res.status(500).json({ error: 'Failed to fetch stocks' });
+  }
+});
+
+// Instance-isolated controls endpoint
+app.get('/api/remote/controls', requireAuthWithFallback, enrichUserInfo, (req, res) => {
+  try {
+    let controls;
+    const instanceId = req.instanceId || 'unknown';
+    
+    if (req.isUnauthenticated) {
+      // Unauthenticated users get instance-specific demo data
+      const demoData = getInstanceDemoData(instanceId);
+      controls = demoData.systemState;
+      console.log(`👥 Serving ${instanceId} demo controls to unauthenticated user`);
+    } else {
+      // Authenticated users get their own isolated data per instance
+      const userData = getUserData(req.user.id, instanceId);
+      controls = userData.systemState;
+      console.log(`🔒 Serving ${instanceId} controls to user: ${req.user.username}`);
+    }
+    
+    const response = {
+      success: true,
+      controls: controls,
+      meta: {
+        instanceId: instanceId,
+        userId: req.isUnauthenticated ? null : req.user.id,
+        userSpecific: !req.isUnauthenticated
+      }
+    };
+    
+    res.json(response);
+  } catch (error) {
+    console.error('Error fetching controls:', error);
+    res.status(500).json({ error: 'Failed to fetch controls' });
+  }
+});
+
+// Get session info endpoint (for debugging)
+app.get('/api/remote/session-info', requireAuthWithFallback, enrichUserInfo, (req, res) => {
+  try {
+    const instanceId = req.instanceId || 'unknown';
+    
+    if (req.isUnauthenticated) {
+      return res.json({
+        success: true,
+        instanceId: instanceId,
+        authenticated: false,
+        message: 'Unauthenticated session - using demo data'
+      });
     }
 
-    console.log(`🔄 Server restart requested by ${req.user.username}`);
+    const sessionKey = `${req.user.id}_${instanceId}`;
+    const userData = getUserData(req.user.id, instanceId);
     
-    // Send response before restarting
     res.json({
       success: true,
-      message: 'Server restart initiated',
-      restartedBy: req.user.username,
-      timestamp: new Date()
+      instanceId: instanceId,
+      authenticated: true,
+      userId: req.user.id,
+      username: req.user.username,
+      sessionKey: sessionKey,
+      stockCount: userData.stocks.length,
+      lastActivity: new Date(userData.lastActivity),
+      message: `Authenticated session for ${instanceId} instance`
     });
-
-    // Graceful shutdown with delay to allow response to be sent
-    setTimeout(() => {
-      console.log('🔄 Gracefully shutting down server for restart...');
-      process.exit(0);
-    }, 1000);
   } catch (error) {
-    console.error('Error restarting server:', error);
-    res.status(500).json({ error: 'Failed to restart server' });
+    console.error('Error getting session info:', error);
+    res.status(500).json({ error: 'Failed to get session info' });
   }
 });
-
-function formatUptime(uptimeMs) {
-  const seconds = Math.floor(uptimeMs / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) {
-    return `${days}d ${hours % 24}h ${minutes % 60}m`;
-  } else if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`;
-  } else if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`;
-  } else {
-    return `${seconds}s`;
-  }
-}
-
-// Automatic market simulation
-function simulateMarket() {
-  if (systemState.isPaused || systemState.isEmergencyStopped) {
-    return; // Don't update prices when system is paused
-  }
-  
-  stocksData.forEach(stock => {
-    // Generate new price using current volatility setting
-    const newPrice = generateRealisticPriceChange(stock.currentPrice, systemState.volatility);
-    
-    // Update stock data
-    stock.previousPrice = stock.currentPrice;
-    stock.currentPrice = newPrice;
-    stock.percentageChange = ((newPrice - stock.initialPrice) / stock.initialPrice) * 100;
-    stock.lastUpdated = new Date();
-    
-    // Add to price history
-    stock.priceHistory.push({
-      timestamp: new Date(),
-      price: newPrice
-    });
-    
-    // Keep price history manageable (last 50 points)
-    if (stock.priceHistory.length > 50) {
-      stock.priceHistory.shift();
-    }
-  });
-}
-
-// Start market simulation timer
-let marketSimulationInterval;
-function startMarketSimulation() {
-  if (marketSimulationInterval) {
-    clearInterval(marketSimulationInterval);
-  }
-  
-  marketSimulationInterval = setInterval(() => {
-    simulateMarket();
-  }, systemState.updateIntervalMs);
-  
-  console.log(`📈 Market simulation started with ${systemState.updateIntervalMs}ms interval and ${systemState.volatility}% volatility`);
-}
-
-// Update market simulation when controls change
-function updateMarketSimulation() {
-  startMarketSimulation(); // Restart with new settings
-}
 
 // Start server
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Remote Control Panel API Server running on http://0.0.0.0:${PORT}`);
-  console.log('📋 Available endpoints:');
-  console.log('  POST /api/remote/auth - Login');
-  console.log('  GET  /api/remote/auth - Verify token');
-  console.log('  GET  /api/remote/stocks - Get all stocks');
-  console.log('  POST /api/remote/stocks - Add stock');
-  console.log('  PUT  /api/remote/stocks/:symbol - Update stock');
-  console.log('  DELETE /api/remote/stocks/:symbol - Delete stock');
-  console.log('  GET  /api/remote/controls - Get system controls');
-  console.log('  PUT  /api/remote/controls - Update controls');
-  console.log('  POST /api/remote/controls/pause - Pause system');
-  console.log('  POST /api/remote/controls/resume - Resume system');
-  console.log('  POST /api/remote/controls/emergency - Emergency stop');
-  console.log('  GET  /api/remote/status - Get system status');
-  console.log('  GET  /api/remote/status/health - Health check');
-  console.log('  POST /api/remote/status/health - Health check');
-  console.log('  GET  /status/health - Frontend health check');
-  console.log('  POST /status/health - Frontend health check');
-  console.log('  POST /api/remote/restart - Restart server (admin only)');
-  console.log('\n🔑 Available accounts:');
-  console.log('  Username: admin (full access)');
-  console.log('  Username: controller (control access)');
-  console.log('  ⚠️  Use environment-configured passwords');
-  
-  // Debug: Show if environment variables are loaded
-  if (process.env.NODE_ENV === 'development') {
-    console.log('\n🔧 Environment Status:');
-    console.log('  Admin hash:', process.env.REMOTE_ADMIN_PASSWORD_HASH ? '✅ SET' : '❌ MISSING');
-    console.log('  Controller hash:', process.env.REMOTE_CONTROLLER_PASSWORD_HASH ? '✅ SET' : '❌ MISSING');
-    
-    console.log('\n📊 Stock Data Initialized:');
-    stocksData.forEach(stock => {
-      console.log(`  ${stock.symbol}: ${stock.priceHistory.length} price points`);
-    });
-  }
-  
-  // Start market simulation with volatility support
-  console.log('\n📈 Starting volatility-aware market simulation...');
-  startMarketSimulation();
-  
-  // Cleanup on server shutdown
-  process.on('SIGTERM', () => {
-    if (marketSimulationInterval) {
-      clearInterval(marketSimulationInterval);
-      console.log('🛑 Market simulation stopped');
-    }
-  });
-  
-  process.on('SIGINT', () => {
-    if (marketSimulationInterval) {
-      clearInterval(marketSimulationInterval);
-      console.log('🛑 Market simulation stopped');
-    }
-  });
-});
-
-// Handle server listen errors
-server.on('error', (error) => {
-  if (error.code === 'EADDRINUSE') {
-    console.error(`❌ Port ${PORT} is already in use. Please try a different port or stop the process using this port.`);
-    console.error('💡 Try: lsof -ti:' + PORT + ' | xargs kill -9');
-    console.error('💡 Or use a different port: PORT=3002 npm run server');
-  } else if (error.code === 'EACCES') {
-    console.error(`❌ Permission denied to bind to port ${PORT}. Try using a port above 1024 or run with elevated privileges.`);
-  } else {
-    console.error('❌ Server failed to start:', error.message);
-  }
-  process.exit(1);
+app.listen(PORT, () => {
+  console.log('🚀 Stock Ticker API Server Started (Instance Isolated)');
+  console.log(`📍 Server running on port ${PORT}`);
+  console.log(`🔗 API Base URL: http://localhost:${PORT}`);
+  console.log(`🔐 Authentication: ${clerkClient ? 'Clerk (Required for admin features)' : 'Disabled'}`);
+  console.log(`🏷️  Instance Isolation: Enabled`);
+  console.log(`👥 Session Storage: User + Instance specific`);
+  console.log(`🔄 Session Cleanup: Every 30 minutes`);
+  console.log('');
+  console.log('📊 Instance Detection:');
+  console.log('  • production: main.d7lc7dqjkvbj3.amplifyapp.com');
+  console.log('  • staging: staging.dv565hju499c6.amplifyapp.com');
+  console.log('  • development: localhost');
+  console.log('');
+  console.log('🔒 Data Isolation:');
+  console.log('  • Each user gets separate data per instance');
+  console.log('  • Production and staging are completely isolated');
+  console.log('  • Session key format: userId_instanceId');
+  console.log('');
+  console.log('✨ Ready to serve isolated data to both instances!');
 });
