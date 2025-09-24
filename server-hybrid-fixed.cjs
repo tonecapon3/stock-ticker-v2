@@ -448,6 +448,25 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Legacy health check endpoint for render.yaml compatibility
+app.get('/status/health', (req, res) => {
+  res.json({
+    success: true,
+    health: 'healthy',
+    checks: {
+      api: 'ok',
+      responseTime: 0,
+      timestamp: new Date().toISOString(),
+      version: '1.0.0-hybrid',
+      server: 'stock-ticker-backend-hybrid'
+    },
+    authentication: {
+      jwt: Boolean(JWT_SECRET),
+      clerk: Boolean(CLERK_SECRET_KEY)
+    }
+  });
+});
+
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Server error:', err);
