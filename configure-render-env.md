@@ -16,7 +16,7 @@ REMOTE_API_KEY=LUVNroP7aO2aedMBooqyANXgueM5iAsg
 
 # Admin user credentials (REQUIRED)
 REMOTE_ADMIN_USERNAME=admin
-REMOTE_ADMIN_PASSWORD_HASH=$2b$10$9kJ/45uz.CnG4Ylj9BfFtOHdMaailgFBvF3l/00UBuKDd3oaAJdXW
+REMOTE_ADMIN_PASSWORD_HASH=$2b$10$GVj0hRnDgJwbMQoF.eV9VeTU0vEACMj7fEKOJrgFT604gW1xfkWpK
 
 # Controller user credentials (REQUIRED)
 REMOTE_CONTROLLER_USERNAME=controller
@@ -49,7 +49,7 @@ RENDER_SERVICE_TYPE=api
 After configuring the environment variables, you can test the API with these credentials:
 
 - **Username:** `admin`
-- **Password:** `admin123`
+- **Password:** `AdminSecure2025!@`
 
 ## ⚡ Quick Setup Steps
 
@@ -71,7 +71,7 @@ curl https://stock-ticker-v2.onrender.com/status/health
 # Test authentication
 curl -X POST https://stock-ticker-v2.onrender.com/api/remote/auth \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "admin123"}'
+  -d '{"username": "admin", "password": "AdminSecure2025!@"}'
 ```
 
 ## ⚠️ Important Notes
