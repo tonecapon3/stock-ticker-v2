@@ -7,9 +7,15 @@
  * It supports both hybrid (Clerk + JWT) and legacy JWT authentication.
  */
 
-const { spawn } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+import { spawn } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Get __dirname equivalent in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Colors for console output
 const colors = {
@@ -169,8 +175,8 @@ function startServer() {
 }
 
 // Main execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   startServer();
 }
 
-module.exports = { startServer, checkEnvironmentConfig, determineServerFile };
+export { startServer, checkEnvironmentConfig, determineServerFile };
