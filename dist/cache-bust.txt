@@ -1,0 +1,4 @@
+DEPLOYMENT_ID: 20241225_API_POST_FIXES_v2
+BUILT_AT: 2024-12-25T07:13:00Z
+COMMIT: 9935582 Fix staging API method calls and routing issues
+FIXES: All API calls now explicitly use GET/POST methods
