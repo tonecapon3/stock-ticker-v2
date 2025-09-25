@@ -63,10 +63,15 @@ const RemoteControlPanelJWT: React.FC = () => {
     try {
       const token = getToken();
       
+      // Don't make API calls without authentication token
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+      
       const response = await fetch(`${API_BASE}${endpoint}`, {
         ...options,
         headers: {
-          'Authorization': token ? `Bearer ${token}` : '',
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
           ...options.headers,
         },
@@ -78,9 +83,8 @@ const RemoteControlPanelJWT: React.FC = () => {
           lastError: 'Authentication expired. Please sign in again.',
           connectionStatus: 'error'
         }));
-        // Clear token and reload page to show login form
+        // Clear token but DON'T reload - let JWTAuthGuard handle the redirect
         localStorage.removeItem('remote-token');
-        setTimeout(() => window.location.reload(), 2000);
         throw new Error('Authentication expired');
       }
 
@@ -409,9 +413,17 @@ const RemoteControlPanelJWT: React.FC = () => {
     setEditPrice('');
   };
 
-  // Initialize data and polling
+  // Initialize data and polling - triggered by authentication status changes
   useEffect(() => {
-    if (shouldUseApiServer()) {
+    // Don't initialize if API server is not configured
+    if (!shouldUseApiServer()) {
+      return;
+    }
+    
+    const token = getToken();
+    
+    if (token) {
+      console.log('🚀 Remote Control Panel: Authentication detected, initializing data...');
       setState(prev => ({ ...prev, isLoading: true }));
       
       Promise.all([
@@ -423,13 +435,45 @@ const RemoteControlPanelJWT: React.FC = () => {
 
       // Set up polling interval
       const interval = setInterval(() => {
-        fetchStocks();
-        fetchControls();
+        // Double-check token before each poll
+        const currentToken = getToken();
+        if (currentToken) {
+          fetchStocks();
+          fetchControls();
+        } else {
+          console.log('🔐 Remote Control Panel: Token lost, stopping polling...');
+          clearInterval(interval);
+        }
       }, 5000);
 
-      return () => clearInterval(interval);
+      return () => {
+        console.log('🛑 Remote Control Panel: Cleaning up polling interval');
+        clearInterval(interval);
+      };
+    } else {
+      console.log('🔐 Remote Control Panel: No authentication token, waiting...');
+      setState(prev => ({ 
+        ...prev, 
+        isLoading: false, 
+        connectionStatus: 'disconnected',
+        stocks: [],
+        controls: null
+      }));
     }
-  }, []);
+    
+    // Add storage event listener to detect token changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'remote-token') {
+        if (e.newValue) {
+          console.log('🔑 Remote Control Panel: Token added, reinitializing...');
+          window.location.reload(); // Simple solution: reload when token is added
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []); // Keep empty dependencies to run only once
 
   // Clear errors after 5 seconds
   useEffect(() => {
