@@ -60,6 +60,12 @@ frontend:
       - .next/cache/**/*
 # SPA redirect rules for client-side routing
 redirects:
+  - source: '/remote'
+    target: '/index.html'
+    status: 200
+  - source: '/remote/*'
+    target: '/index.html'
+    status: 200
   - source: '/<*>'
     target: '/index.html'
     status: 200
