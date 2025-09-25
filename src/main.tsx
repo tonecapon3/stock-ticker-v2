@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 
-// NUCLEAR CACHE-BUSTING v0.1.5 - Force new build hashes
-console.log('🚀 Stock Ticker v0.1.5 - NUCLEAR cache-busting + HTTP method fixes');
+// DEBUG VERSION v0.1.6 - Add logging to find bulk operations
+console.log('🚀 Stock Ticker v0.1.6 - DEBUG: Find why bulk operations are called');
 import { ClerkProvider } from '@clerk/clerk-react'
 import { clerkConfig } from './config/clerk'
 

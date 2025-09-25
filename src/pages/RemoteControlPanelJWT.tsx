@@ -101,6 +101,7 @@ const RemoteControlPanelJWT: React.FC = () => {
 
   // Fetch stocks
   const fetchStocks = async () => {
+    console.log('📊 DEBUG: fetchStocks() called - making GET request to /stocks');
     try {
       const response = await apiCall('/stocks', { method: 'GET' });
       const data = await response.json();
@@ -125,6 +126,7 @@ const RemoteControlPanelJWT: React.FC = () => {
 
   // Fetch controls
   const fetchControls = async () => {
+    console.log('🎮 DEBUG: fetchControls() called - making GET request to /controls');
     try {
       const response = await apiCall('/controls', { method: 'GET' });
       const data = await response.json();
@@ -173,6 +175,10 @@ const RemoteControlPanelJWT: React.FC = () => {
 
   // Bulk update stocks
   const bulkUpdateStocks = async (updateType: string, percentage?: number) => {
+    // DEBUG: Log what's calling this function
+    console.log('🚨 DEBUG: bulkUpdateStocks called with:', { updateType, percentage });
+    console.trace('🚨 DEBUG: Call stack trace:');
+    
     try {
       const response = await apiCall('/stocks/bulk', {
         method: 'PUT',
@@ -426,10 +432,12 @@ const RemoteControlPanelJWT: React.FC = () => {
       console.log('🚀 Remote Control Panel: Authentication detected, initializing data...');
       setState(prev => ({ ...prev, isLoading: true }));
       
+      console.log('📝 DEBUG: About to call fetchStocks() and fetchControls()');
       Promise.all([
         fetchStocks(),
         fetchControls()
       ]).finally(() => {
+        console.log('📝 DEBUG: Initialization complete');
         setState(prev => ({ ...prev, isLoading: false }));
       });
 
