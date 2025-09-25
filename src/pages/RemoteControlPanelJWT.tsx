@@ -102,7 +102,7 @@ const RemoteControlPanelJWT: React.FC = () => {
   // Fetch stocks
   const fetchStocks = async () => {
     try {
-      const response = await apiCall('/stocks');
+      const response = await apiCall('/stocks', { method: 'GET' });
       const data = await response.json();
       
       if (response.ok && data.success) {
@@ -126,7 +126,7 @@ const RemoteControlPanelJWT: React.FC = () => {
   // Fetch controls
   const fetchControls = async () => {
     try {
-      const response = await apiCall('/controls');
+      const response = await apiCall('/controls', { method: 'GET' });
       const data = await response.json();
       
       if (response.ok && data.success) {
