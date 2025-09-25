@@ -1,7 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { ClerkProvider } from '@clerk/clerk-react'
-import App from './App'
+import App from './App.tsx'
+import './index.css'
+
+// Force cache-busting deployment v0.1.3 - Fixed POST->GET methods
+console.log('🚀 Stock Ticker v0.1.3 - Cache-busted deployment with HTTP method fixes');
 import { clerkConfig } from './config/clerk'
 import './index.css'
 
