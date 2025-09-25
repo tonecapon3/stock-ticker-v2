@@ -1,7 +1,7 @@
-// Force cache invalidation and reload - v0.1.3
+// Force cache invalidation and reload - v0.1.4 (ClerkProvider fix)
 (function() {
-  const currentVersion = '0.1.3';
-  const deploymentTime = '1735116687';
+  const currentVersion = '0.1.4';
+  const deploymentTime = '1735117221';
   const cacheKey = 'stock-ticker-version';
   
   console.log('🔄 Force-reload script loaded - version:', currentVersion);

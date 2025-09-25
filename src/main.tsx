@@ -3,10 +3,10 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 
-// Force cache-busting deployment v0.1.3 - Fixed POST->GET methods
-console.log('🚀 Stock Ticker v0.1.3 - Cache-busted deployment with HTTP method fixes');
+// Force cache-busting deployment v0.1.4 - Fixed ClerkProvider import
+console.log('🚀 Stock Ticker v0.1.4 - Fixed ClerkProvider import and HTTP methods');
+import { ClerkProvider } from '@clerk/clerk-react'
 import { clerkConfig } from './config/clerk'
-import './index.css'
 
 // Error boundary component for Clerk initialization errors
 class ClerkErrorBoundary extends React.Component<
