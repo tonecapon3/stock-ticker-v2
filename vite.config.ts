@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import { fileURLToPath, URL } from 'node:url'
 
+// Force cache-busting with timestamp
+const timestamp = Date.now();
+
 // https://vitejs.dev/config/
 export default defineConfig(({ command, mode }) => {
   // Load env file based on `mode` in the current working directory.
@@ -23,6 +26,14 @@ export default defineConfig(({ command, mode }) => {
       outDir: 'dist',
       sourcemap: mode === 'development',
       minify: mode === 'production',
+      rollupOptions: {
+        output: {
+          // Force new filenames on every build
+          entryFileNames: `assets/[name]-${timestamp}.[hash].js`,
+          chunkFileNames: `assets/[name]-${timestamp}.[hash].js`,
+          assetFileNames: `assets/[name]-${timestamp}.[hash].[ext]`
+        }
+      }
     },
     css: {
       postcss: './postcss.config.js',

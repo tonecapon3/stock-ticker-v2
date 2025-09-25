@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
 
-// Force cache-busting deployment v0.1.4 - Fixed ClerkProvider import
-console.log('🚀 Stock Ticker v0.1.4 - Fixed ClerkProvider import and HTTP methods');
+// NUCLEAR CACHE-BUSTING v0.1.5 - Force new build hashes
+console.log('🚀 Stock Ticker v0.1.5 - NUCLEAR cache-busting + HTTP method fixes');
 import { ClerkProvider } from '@clerk/clerk-react'
 import { clerkConfig } from './config/clerk'
 

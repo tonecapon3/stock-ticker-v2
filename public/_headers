@@ -1,0 +1,19 @@
+# Disable caching for HTML files to ensure latest version loads
+/index.html
+  cache-control: no-cache, no-store, must-revalidate
+  pragma: no-cache
+  expires: 0
+
+# Disable caching for force-reload script
+/force-reload.js
+  cache-control: no-cache, no-store, must-revalidate
+  pragma: no-cache
+  expires: 0
+
+# Short cache for JS/CSS assets to allow updates
+/assets/*
+  cache-control: public, max-age=300
+  
+# Default no-cache for everything else
+/*
+  cache-control: no-cache, no-store, must-revalidate
