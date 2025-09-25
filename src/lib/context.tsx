@@ -815,7 +815,13 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const fetchStocksFromAPI = useCallback(async (): Promise<void> => {
     // Skip API calls if no API server is configured
     if (!shouldUseApiServer()) {
-      console.log('🏭 API server disabled, using local data only');
+      console.log('🏥 API server disabled, using local data only');
+      return;
+    }
+    
+    // CRITICAL: Skip API calls if not authenticated
+    if (!isJWTBridgeAuthenticated()) {
+      console.log('⚠️ Skipping API call - not authenticated yet');
       return;
     }
     
@@ -823,6 +829,13 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     try {
       const apiUrl = buildApiUrl(API_ENDPOINTS.STOCKS);
       const headers = getJWTAuthHeaders();
+      
+      // Double-check we have auth headers
+      if (!headers.Authorization) {
+        console.warn('⚠️ No authorization header available, skipping API call');
+        return;
+      }
+      
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: headers,
@@ -831,8 +844,15 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.log('📡 API Response status:', response.status);
       
       if (!response.ok) {
-        // If API is not available, continue with local data
-        console.warn('⚠️ API server not available, using local stock data');
+        // If we get 401, it means our authentication expired or failed
+        if (response.status === 401) {
+          console.warn('⚠️ API authentication failed (401), clearing auth and retrying later');
+          clearJWTBridge();
+          return;
+        }
+        
+        // Other errors - continue with local data
+        console.warn('⚠️ API server error, using local stock data');
         return;
       }
       
@@ -965,7 +985,13 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
   const fetchControlsFromAPI = useCallback(async (): Promise<void> => {
     // Skip API calls if no API server is configured
     if (!shouldUseApiServer()) {
-      console.log('🏭 API server disabled, using local controls only');
+      console.log('🏥 API server disabled, using local controls only');
+      return;
+    }
+    
+    // CRITICAL: Skip API calls if not authenticated
+    if (!isJWTBridgeAuthenticated()) {
+      console.log('⚠️ Skipping controls API call - not authenticated yet');
       return;
     }
     
@@ -973,6 +999,13 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
     try {
       const apiUrl = buildApiUrl(API_ENDPOINTS.CONTROLS);
       const headers = getJWTAuthHeaders();
+      
+      // Double-check we have auth headers
+      if (!headers.Authorization) {
+        console.warn('⚠️ No authorization header available for controls, skipping API call');
+        return;
+      }
+      
       const response = await fetch(apiUrl, {
         method: 'GET',
         headers: headers,
@@ -981,8 +1014,15 @@ export const TickerProvider: React.FC<{ children: ReactNode }> = ({ children }) 
       console.log('📡 Controls API Response status:', response.status);
       
       if (!response.ok) {
-        // If API is not available, continue with local data
-        console.warn('⚠️ Controls API server not available, using local control data');
+        // If we get 401, it means our authentication expired or failed
+        if (response.status === 401) {
+          console.warn('⚠️ Controls API authentication failed (401), clearing auth and retrying later');
+          clearJWTBridge();
+          return;
+        }
+        
+        // Other errors - continue with local data
+        console.warn('⚠️ Controls API server error, using local control data');
         return;
       }
       

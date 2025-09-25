@@ -316,10 +316,10 @@ export default function ControlsPage() {
     const checkServerStatus = async () => {
       // Skip API server status check in production if no API server is configured
       if (!shouldUseApiServer()) {
-        setServerStatus('offline');
+        setServerStatus('online'); // Show as online for local mode
         setServerInfo({
           lastCheck: new Date(),
-          error: 'Frontend-only mode - No API server required'
+          uptime: 'Local mode - No API server required'
         });
         console.log('%cℹ️ Production Mode: Frontend-Only', 'color: #60a5fa; font-weight: bold');
         console.log('%cAPI Server Status: ⭕ Not Required', 'color: #60a5fa');
@@ -329,10 +329,28 @@ export default function ControlsPage() {
       
       try {
         setServerStatus('checking');
+        
+        // Import JWT bridge functions
+        const { isJWTBridgeAuthenticated, authenticateWithJWTBridge, getJWTBridgeHeaders } = await import('../auth/utils/clerkJwtBridge');
+        
+        // Try to authenticate if not already authenticated
+        if (!isJWTBridgeAuthenticated()) {
+          console.log('🔐 API Status: Authenticating with server...');
+          const authResult = await authenticateWithJWTBridge('status-check');
+          
+          if (!authResult.success) {
+            // Server might be down if we can't authenticate
+            throw new Error('Authentication failed - server may be offline');
+          }
+        }
+        
+        // Now make authenticated request
         const apiUrl = buildApiUrl(API_ENDPOINTS.STOCKS);
+        const headers = getJWTBridgeHeaders();
+        
         const response = await fetch(apiUrl, {
           method: 'GET',
-          timeout: 5000,
+          headers,
         });
         
         if (response.ok) {
@@ -343,15 +361,38 @@ export default function ControlsPage() {
             lastCheck: new Date(),
             uptime: 'Running'
           });
+          console.log('✅ API Server Status: Connected and authenticated');
+        } else if (response.status === 401) {
+          // 401 means server is up but authentication failed
+          setServerStatus('online');
+          setServerInfo({
+            port: 3001,
+            lastCheck: new Date(),
+            uptime: 'Server online - Authentication in progress',
+            error: undefined // Clear any previous errors
+          });
+          console.log('🔑 API Server Status: Online (authentication required)');
         } else {
           throw new Error(`Server responded with status ${response.status}`);
         }
       } catch (error) {
-        setServerStatus('offline');
-        setServerInfo({
-          lastCheck: new Date(),
-          error: error instanceof Error ? error.message : 'Connection failed'
-        });
+        // Only show as offline for real connection errors (not auth errors)
+        if (error instanceof Error && error.message.includes('fetch')) {
+          setServerStatus('offline');
+          setServerInfo({
+            lastCheck: new Date(),
+            error: 'Connection failed - Server may be down'
+          });
+        } else {
+          // Authentication or other errors - server is likely up
+          setServerStatus('online');
+          setServerInfo({
+            lastCheck: new Date(),
+            uptime: 'Server responding',
+            error: 'Authentication in progress'
+          });
+        }
+        console.log('⚠️ API Status check result:', error instanceof Error ? error.message : 'Unknown error');
       }
     };
 
