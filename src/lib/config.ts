@@ -4,24 +4,26 @@
 
 // Get the API base URL based on environment
 export const getApiBaseUrl = (): string => {
-  // TEMPORARY HARDCODE FIX: Force correct API URL
-  const FORCED_API_URL = 'https://stock-ticker-api-staging.onrender.com';
-  console.log('🚑 TEMPORARY FIX: Hardcoding API URL to', FORCED_API_URL);
+  // EMERGENCY HARDCODE: Completely bypass environment variables
+  const EMERGENCY_API_URL = 'https://stock-ticker-api-staging.onrender.com';
   
-  const apiUrl = import.meta.env.VITE_API_BASE_URL;
+  console.log('🎆 EMERGENCY: Bypassing all env vars, using hardcoded URL');
+  console.log('🚑 API URL:', EMERGENCY_API_URL);
   
-  // Debug: Log all environment variables for troubleshooting
-  console.log('🔧 Environment Debug:', {
-    VITE_API_BASE_URL: apiUrl,
+  // Log what Amplify is actually providing (for debugging)
+  console.log('🔍 Amplify Environment Vars:', {
+    VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
     VITE_INSTANCE_ID: import.meta.env.VITE_INSTANCE_ID,
+    VITE_SESSION_DOMAIN: import.meta.env.VITE_SESSION_DOMAIN,
     MODE: import.meta.env.MODE,
     DEV: import.meta.env.DEV,
     PROD: import.meta.env.PROD,
-    FORCED_URL: FORCED_API_URL
+    // Log the window location to identify which site
+    CURRENT_ORIGIN: typeof window !== 'undefined' ? window.location.origin : 'unknown'
   });
   
-  // Return the working URL immediately
-  return FORCED_API_URL;
+  // ALWAYS return the working URL regardless of environment
+  return EMERGENCY_API_URL;
 };
 
 // API endpoint configurations
