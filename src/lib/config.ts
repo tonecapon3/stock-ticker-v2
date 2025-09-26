@@ -14,9 +14,10 @@ export const getApiBaseUrl = (): string => {
     apiUrl = 'https://stock-ticker-api-staging.onrender.com';
     console.log('🏢 Staging Environment: Using staging API');
   } else if (currentOrigin.includes('main.d7lc7dqjkvbj3.amplifyapp.com')) {
-    // Production environment  
+    // Production environment - Using dedicated production API
     apiUrl = 'https://stock-ticker-api-production.onrender.com';
     console.log('🏭 Production Environment: Using production API');
+    console.log('🔒 Isolated from staging environment');
   } else if (currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1')) {
     // Local development
     apiUrl = 'http://localhost:3001';
