@@ -45,7 +45,7 @@ COPY --chown=stockticker:nodejs server.js ./
 COPY --chown=stockticker:nodejs server-production.js ./
 
 # Copy environment template (should be replaced in deployment)
-COPY --chown=stockticker:nodejs .env.production.template ./.env
+COPY --chown=stockticker:nodejs production.env.template ./.env
 
 # Create logs directory
 RUN mkdir -p /app/logs && chown stockticker:nodejs /app/logs
