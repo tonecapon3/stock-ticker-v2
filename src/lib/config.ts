@@ -4,6 +4,10 @@
 
 // Get the API base URL based on environment
 export const getApiBaseUrl = (): string => {
+  // TEMPORARY HARDCODE FIX: Force correct API URL
+  const FORCED_API_URL = 'https://stock-ticker-api-staging.onrender.com';
+  console.log('🚑 TEMPORARY FIX: Hardcoding API URL to', FORCED_API_URL);
+  
   const apiUrl = import.meta.env.VITE_API_BASE_URL;
   
   // Debug: Log all environment variables for troubleshooting
@@ -12,40 +16,12 @@ export const getApiBaseUrl = (): string => {
     VITE_INSTANCE_ID: import.meta.env.VITE_INSTANCE_ID,
     MODE: import.meta.env.MODE,
     DEV: import.meta.env.DEV,
-    PROD: import.meta.env.PROD
+    PROD: import.meta.env.PROD,
+    FORCED_URL: FORCED_API_URL
   });
   
-  // If API URL is explicitly configured, use it (prioritize environment variable)
-  if (apiUrl && 
-      apiUrl.trim() !== '' && 
-      (apiUrl.startsWith('https://') || apiUrl.startsWith('http://')))
-    
-    const cleanUrl = apiUrl.replace(/\/+$/, ''); // Remove trailing slashes
-    if (import.meta.env.DEV) {
-      console.log(`🌐 API server configured: ${cleanUrl}`);
-    }
-    return cleanUrl;
-  }
-  
-  // Check if we're in local development without API URL configured
-  const isLocalDevelopment = (import.meta.env.DEV || 
-                             window.location.hostname === 'localhost' || 
-                             window.location.hostname === '127.0.0.1') && 
-                            !apiUrl;
-  
-  if (isLocalDevelopment) {
-    // Development mode with no API URL configured: use local server
-    console.log('🏠 Development mode: using local API server');
-    return 'http://localhost:3001';
-  } else {
-    // Production without API URL - use working staging server as default
-    const productionDefault = 'https://stock-ticker-api-staging.onrender.com';
-    console.log('🚨 FALLBACK: VITE_API_BASE_URL not configured properly!');
-    console.log('🔧 API URL value:', apiUrl);
-    console.log(`🏭 Using hardcoded fallback: ${productionDefault}`);
-    console.log('💡 Set VITE_API_BASE_URL in Amplify environment to override this.');
-    return productionDefault;
-  }
+  // Return the working URL immediately
+  return FORCED_API_URL;
 };
 
 // API endpoint configurations
