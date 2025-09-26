@@ -351,6 +351,157 @@ app.get('/api/remote/stocks', hybridAuth, (req, res) => {
   });
 });
 
+// Add new stock (requires controller or admin role)
+app.post('/api/remote/stocks', hybridAuth, requireRole(['controller', 'admin']), (req, res) => {
+  const { symbol, name, initialPrice } = req.body;
+  
+  console.log(`📈 Adding new stock ${symbol} by ${req.user.username} (${req.user.authMethod})`);
+  
+  // Validation
+  if (!symbol || !name || !initialPrice) {
+    return res.status(400).json({ 
+      error: 'Symbol, name, and initial price are required',
+      authMethod: req.user.authMethod
+    });
+  }
+  
+  if (!/^[A-Z]{1,5}$/.test(symbol)) {
+    return res.status(400).json({ 
+      error: 'Symbol must be 1-5 uppercase letters',
+      authMethod: req.user.authMethod
+    });
+  }
+  
+  if (isNaN(initialPrice) || initialPrice <= 0 || initialPrice > 1000000) {
+    return res.status(400).json({ 
+      error: 'Initial price must be between 0.01 and 1,000,000',
+      authMethod: req.user.authMethod
+    });
+  }
+  
+  // Check if stock already exists
+  if (stocksData.some(stock => stock.symbol === symbol)) {
+    return res.status(409).json({ 
+      error: 'Stock with this symbol already exists',
+      authMethod: req.user.authMethod
+    });
+  }
+  
+  // Create new stock
+  const newStock = {
+    symbol: symbol.toUpperCase(),
+    name: name.trim(),
+    currentPrice: parseFloat(initialPrice),
+    previousPrice: parseFloat(initialPrice),
+    initialPrice: parseFloat(initialPrice),
+    percentageChange: 0,
+    lastUpdated: new Date(),
+    priceHistory: [{
+      timestamp: new Date(),
+      price: parseFloat(initialPrice)
+    }]
+  };
+  
+  // Add to stocks array
+  stocksData.push(newStock);
+  
+  console.log(`✅ Stock ${symbol} added successfully by ${req.user.username}`);
+  
+  res.status(201).json({
+    success: true,
+    stock: newStock,
+    message: `Stock ${symbol} added successfully`,
+    authMethod: req.user.authMethod
+  });
+});
+
+// Bulk stock operations (requires controller or admin role)
+app.put('/api/remote/stocks/bulk', hybridAuth, requireRole(['controller', 'admin']), (req, res) => {
+  const { updateType, percentage } = req.body;
+  
+  console.log(`🚀 Bulk operation ${updateType} by ${req.user.username} (${req.user.authMethod})`);
+  
+  if (!updateType) {
+    return res.status(400).json({ 
+      error: 'updateType is required',
+      authMethod: req.user.authMethod
+    });
+  }
+  
+  let updatedStocks = [];
+  const changes = [];
+  
+  stocksData.forEach((stock) => {
+    let newPrice;
+    const currentPrice = stock.currentPrice;
+    
+    switch (updateType) {
+      case 'percentage':
+        const pct = percentage || 0;
+        newPrice = currentPrice * (1 + pct / 100);
+        break;
+      case 'random':
+      case 'simulate':
+        // Random fluctuation between -5% and +5%
+        const randomPct = (Math.random() * 10) - 5;
+        newPrice = currentPrice * (1 + randomPct / 100);
+        break;
+      case 'reset':
+        newPrice = stock.initialPrice;
+        break;
+      case 'bull':
+      case 'market_boom':
+        newPrice = currentPrice * 1.2; // 20% increase
+        break;
+      case 'bear':
+      case 'market_crash':
+        newPrice = currentPrice * 0.8; // 20% decrease
+        break;
+      default:
+        newPrice = currentPrice;
+    }
+    
+    // Ensure price is within bounds
+    newPrice = Math.max(0.01, Math.min(1000000, newPrice));
+    
+    if (newPrice !== currentPrice) {
+      const previousPrice = stock.currentPrice;
+      stock.previousPrice = previousPrice;
+      stock.currentPrice = newPrice;
+      stock.percentageChange = ((newPrice - stock.initialPrice) / stock.initialPrice) * 100;
+      stock.lastUpdated = new Date();
+      
+      // Add to price history
+      stock.priceHistory.push({
+        timestamp: new Date(),
+        price: newPrice
+      });
+      
+      // Keep only last 100 points
+      if (stock.priceHistory.length > 100) {
+        stock.priceHistory = stock.priceHistory.slice(-100);
+      }
+      
+      changes.push(`${stock.symbol}: ${previousPrice.toFixed(2)} → ${newPrice.toFixed(2)}`);
+      updatedStocks.push(stock.symbol);
+    }
+  });
+  
+  console.log(`✅ Bulk ${updateType} completed - updated ${updatedStocks.length} stocks`);
+  
+  res.json({
+    success: true,
+    updatedCount: updatedStocks.length,
+    updatedStocks: updatedStocks,
+    changes: changes,
+    updateType: updateType,
+    percentage: percentage,
+    updatedBy: req.user.username,
+    authMethod: req.user.authMethod,
+    timestamp: new Date()
+  });
+});
+
 // Get system controls
 app.get('/api/remote/controls', hybridAuth, (req, res) => {
   console.log(`⚙️ Controls requested by ${req.user.username} (${req.user.authMethod})`);
@@ -362,7 +513,149 @@ app.get('/api/remote/controls', hybridAuth, (req, res) => {
   });
 });
 
-// Update stock price (requires controller or admin role)
+// Update system controls (requires controller or admin role)
+app.put('/api/remote/controls', hybridAuth, requireRole(['controller', 'admin']), (req, res) => {
+  const updates = req.body;
+  
+  console.log(`🔧 Controls update by ${req.user.username} (${req.user.authMethod}):`, updates);
+  
+  const changes = [];
+  
+  // Validate and update isPaused
+  if (updates.isPaused !== undefined) {
+    if (typeof updates.isPaused !== 'boolean') {
+      return res.status(400).json({ 
+        error: 'isPaused must be a boolean',
+        authMethod: req.user.authMethod
+      });
+    }
+    const oldState = systemState.isPaused;
+    systemState.isPaused = updates.isPaused;
+    changes.push(`System ${updates.isPaused ? 'paused' : 'resumed'} (was ${oldState ? 'paused' : 'running'})`);
+  }
+  
+  // Validate and update updateIntervalMs
+  if (updates.updateIntervalMs !== undefined) {
+    if (typeof updates.updateIntervalMs !== 'number' || updates.updateIntervalMs < 100 || updates.updateIntervalMs > 10000) {
+      return res.status(400).json({ 
+        error: 'updateIntervalMs must be a number between 100 and 10000',
+        authMethod: req.user.authMethod
+      });
+    }
+    const oldInterval = systemState.updateIntervalMs;
+    systemState.updateIntervalMs = updates.updateIntervalMs;
+    changes.push(`Update interval changed from ${oldInterval}ms to ${updates.updateIntervalMs}ms`);
+  }
+  
+  // Validate and update selectedCurrency
+  if (updates.selectedCurrency !== undefined) {
+    const validCurrencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'CHF', 'INR'];
+    if (typeof updates.selectedCurrency !== 'string' || !validCurrencies.includes(updates.selectedCurrency)) {
+      return res.status(400).json({ 
+        error: `selectedCurrency must be one of: ${validCurrencies.join(', ')}`,
+        authMethod: req.user.authMethod
+      });
+    }
+    const oldCurrency = systemState.selectedCurrency;
+    systemState.selectedCurrency = updates.selectedCurrency;
+    changes.push(`Currency changed from ${oldCurrency} to ${updates.selectedCurrency}`);
+  }
+  
+  // Validate and update volatility
+  if (updates.volatility !== undefined) {
+    if (typeof updates.volatility !== 'number' || updates.volatility < 0.1 || updates.volatility > 10.0) {
+      return res.status(400).json({ 
+        error: 'volatility must be a number between 0.1 and 10.0',
+        authMethod: req.user.authMethod
+      });
+    }
+    const oldVolatility = systemState.volatility;
+    systemState.volatility = updates.volatility;
+    changes.push(`Volatility changed from ${oldVolatility}% to ${updates.volatility}%`);
+  }
+  
+  // Validate and update emergency stop
+  if (updates.isEmergencyStopped !== undefined) {
+    if (typeof updates.isEmergencyStopped !== 'boolean') {
+      return res.status(400).json({ 
+        error: 'isEmergencyStopped must be a boolean',
+        authMethod: req.user.authMethod
+      });
+    }
+    systemState.isEmergencyStopped = updates.isEmergencyStopped;
+    if (updates.isEmergencyStopped) {
+      systemState.isPaused = true; // Emergency stop also pauses
+    }
+    changes.push(`Emergency stop ${updates.isEmergencyStopped ? 'activated' : 'deactivated'}`);
+  }
+  
+  if (changes.length === 0) {
+    return res.status(400).json({ 
+      error: 'No valid update fields provided',
+      authMethod: req.user.authMethod
+    });
+  }
+  
+  systemState.lastUpdated = new Date();
+  
+  console.log(`✅ Controls updated by ${req.user.username}: ${changes.join(', ')}`);
+  
+  res.json({
+    success: true,
+    controls: systemState,
+    changes: changes,
+    updatedBy: req.user.username,
+    authMethod: req.user.authMethod,
+    timestamp: new Date()
+  });
+});
+
+// Update individual stock (requires controller or admin role)
+app.put('/api/remote/stocks/:symbol', hybridAuth, requireRole(['controller', 'admin']), (req, res) => {
+  const { symbol } = req.params;
+  const { price } = req.body;
+  
+  console.log(`💰 Stock update for ${symbol} by ${req.user.username} (${req.user.authMethod}): ${price}`);
+  
+  if (!price || isNaN(price) || price <= 0) {
+    return res.status(400).json({ 
+      error: 'Valid price required',
+      authMethod: req.user.authMethod
+    });
+  }
+  
+  const stock = stocksData.find(s => s.symbol === symbol.toUpperCase());
+  if (!stock) {
+    return res.status(404).json({ 
+      error: 'Stock not found',
+      authMethod: req.user.authMethod
+    });
+  }
+  
+  stock.previousPrice = stock.currentPrice;
+  stock.currentPrice = parseFloat(price);
+  stock.percentageChange = ((stock.currentPrice - stock.initialPrice) / stock.initialPrice) * 100;
+  stock.lastUpdated = new Date();
+  
+  // Add to price history
+  stock.priceHistory.push({
+    timestamp: new Date(),
+    price: stock.currentPrice
+  });
+  
+  // Keep only last 100 points
+  if (stock.priceHistory.length > 100) {
+    stock.priceHistory = stock.priceHistory.slice(-100);
+  }
+  
+  res.json({
+    success: true,
+    stock,
+    authMethod: req.user.authMethod
+  });
+});
+
+// Update stock price (legacy endpoint - requires controller or admin role)
 app.put('/api/remote/stocks/:symbol/price', hybridAuth, requireRole(['controller', 'admin']), (req, res) => {
   const { symbol } = req.params;
   const { price } = req.body;
