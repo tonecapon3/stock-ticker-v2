@@ -610,6 +610,55 @@ app.put('/api/remote/controls', hybridAuth, requireRole(['controller', 'admin'])
   });
 });
 
+// Dedicated pause endpoint (requires controller or admin role)
+app.post('/api/remote/controls/pause', hybridAuth, requireRole(['controller', 'admin']), (req, res) => {
+  console.log(`⏸️ System pause by ${req.user.username} (${req.user.authMethod})`);
+  
+  const wasPaused = systemState.isPaused;
+  systemState.isPaused = true;
+  systemState.lastUpdated = new Date();
+  
+  const message = wasPaused ? 'System was already paused' : 'System paused successfully';
+  const changes = [wasPaused ? 'System was already paused' : 'System paused'];
+  
+  console.log(`✅ ${message} by ${req.user.username}`);
+  
+  res.json({
+    success: true,
+    message: message,
+    controls: systemState,
+    changes: changes,
+    updatedBy: req.user.username,
+    authMethod: req.user.authMethod,
+    timestamp: new Date()
+  });
+});
+
+// Dedicated resume endpoint (requires controller or admin role)
+app.post('/api/remote/controls/resume', hybridAuth, requireRole(['controller', 'admin']), (req, res) => {
+  console.log(`▶️ System resume by ${req.user.username} (${req.user.authMethod})`);
+  
+  const wasPaused = systemState.isPaused;
+  systemState.isPaused = false;
+  systemState.isEmergencyStopped = false; // Resume also clears emergency stop
+  systemState.lastUpdated = new Date();
+  
+  const message = wasPaused ? 'System resumed successfully' : 'System was already running';
+  const changes = [wasPaused ? 'System resumed' : 'System was already running'];
+  
+  console.log(`✅ ${message} by ${req.user.username}`);
+  
+  res.json({
+    success: true,
+    message: message,
+    controls: systemState,
+    changes: changes,
+    updatedBy: req.user.username,
+    authMethod: req.user.authMethod,
+    timestamp: new Date()
+  });
+});
+
 // Update individual stock (requires controller or admin role)
 app.put('/api/remote/stocks/:symbol', hybridAuth, requireRole(['controller', 'admin']), (req, res) => {
   const { symbol } = req.params;
