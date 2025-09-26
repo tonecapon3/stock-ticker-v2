@@ -12,10 +12,10 @@ env:
       VITE_CLERK_PUBLISHABLE_KEY: pk_test_d29ya2FibGUtbWFydGluLTAuY2xlcmsuYWNjb3VudHMuZGV2JA
       NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_d29ya2FibGUtbWFydGluLTAuY2xlcmsuYWNjb3VudHMuZGV2JA
       CLERK_SECRET_KEY: sk_test_SThTzDsbXHbUr9wjn1srdFmnMXTrkeAxCu5gOif5uW
-      VITE_API_BASE_URL: https://stock-ticker-api-production.onrender.com
-      VITE_DEBUG_MODE: "false"
-      VITE_LOG_LEVEL: "warn"
-      VITE_INSTANCE_ID: "production"
+      VITE_API_BASE_URL: https://stock-ticker-api-staging.onrender.com
+      VITE_DEBUG_MODE: "true"
+      VITE_LOG_LEVEL: "debug"
+      VITE_INSTANCE_ID: "staging"
       VITE_SESSION_DOMAIN: "main"
   staging:
     variables:
