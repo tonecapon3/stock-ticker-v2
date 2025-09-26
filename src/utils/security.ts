@@ -119,6 +119,8 @@ function generateCSPPolicy(reportViolations: boolean): string {
     "font-src 'self' data: https:",
     connectSrc,
     "frame-src 'self' https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev", // Allow Clerk frames
+    "worker-src 'self' blob:", // Allow worker scripts and blob URLs
+    "child-src 'self' blob:", // Allow child contexts from blob URLs
     "base-uri 'self'",
     "form-action 'self' https://clerk.com https://*.clerk.accounts.dev https://*.clerk.dev", // Allow Clerk form actions
   ];

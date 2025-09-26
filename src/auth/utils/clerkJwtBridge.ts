@@ -94,10 +94,27 @@ export async function authenticateWithJWTBridge(
       throw new Error(errorMessage);
     }
   } catch (error) {
-    console.error('❌ JWT Bridge authentication failed:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('❌ JWT Bridge authentication failed:', errorMessage);
+    
+    // Detect CORS/Network errors and provide helpful messaging
+    const isCorsError = errorMessage.includes('NetworkError') || 
+                       errorMessage.includes('Failed to fetch') ||
+                       errorMessage.includes('CORS') ||
+                       errorMessage.includes('blocked');
+    
+    if (isCorsError) {
+      console.log('🚨 CORS Error Detected!');
+      console.log('🔧 The API server needs to allow this domain in CORS configuration.');
+      console.log('🌐 Current domain:', typeof window !== 'undefined' ? window.location.origin : 'unknown');
+      console.log('🔄 App will continue in local-only mode.');
+      console.log('💡 To fix: Update REMOTE_ALLOWED_ORIGINS in your API server.');
+    }
+    
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: errorMessage,
+      isCorsError: isCorsError
     };
   }
 }

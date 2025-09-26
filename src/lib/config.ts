@@ -4,26 +4,39 @@
 
 // Get the API base URL based on environment
 export const getApiBaseUrl = (): string => {
-  // EMERGENCY HARDCODE: Completely bypass environment variables
-  const EMERGENCY_API_URL = 'https://stock-ticker-api-staging.onrender.com';
+  const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'unknown';
   
-  console.log('🎆 EMERGENCY: Bypassing all env vars, using hardcoded URL');
-  console.log('🚑 API URL:', EMERGENCY_API_URL);
+  // Environment-based API URL routing
+  let apiUrl: string;
   
-  // Log what Amplify is actually providing (for debugging)
-  console.log('🔍 Amplify Environment Vars:', {
+  if (currentOrigin.includes('staging.dv565hju499c6.amplifyapp.com')) {
+    // Staging environment
+    apiUrl = 'https://stock-ticker-api-staging.onrender.com';
+    console.log('🏢 Staging Environment: Using staging API');
+  } else if (currentOrigin.includes('main.d7lc7dqjkvbj3.amplifyapp.com')) {
+    // Production environment  
+    apiUrl = 'https://stock-ticker-api-production.onrender.com';
+    console.log('🏭 Production Environment: Using production API');
+  } else if (currentOrigin.includes('localhost') || currentOrigin.includes('127.0.0.1')) {
+    // Local development
+    apiUrl = 'http://localhost:3001';
+    console.log('🏠 Development Environment: Using local API');
+  } else {
+    // Fallback for unknown environments - use staging
+    apiUrl = 'https://stock-ticker-api-staging.onrender.com';
+    console.log('🔄 Unknown Environment: Falling back to staging API');
+  }
+  
+  console.log('🌐 API URL Selected:', apiUrl);
+  console.log('🔍 Environment Debug:', {
+    CURRENT_ORIGIN: currentOrigin,
+    API_URL: apiUrl,
     VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
     VITE_INSTANCE_ID: import.meta.env.VITE_INSTANCE_ID,
-    VITE_SESSION_DOMAIN: import.meta.env.VITE_SESSION_DOMAIN,
-    MODE: import.meta.env.MODE,
-    DEV: import.meta.env.DEV,
-    PROD: import.meta.env.PROD,
-    // Log the window location to identify which site
-    CURRENT_ORIGIN: typeof window !== 'undefined' ? window.location.origin : 'unknown'
+    MODE: import.meta.env.MODE
   });
   
-  // ALWAYS return the working URL regardless of environment
-  return EMERGENCY_API_URL;
+  return apiUrl;
 };
 
 // API endpoint configurations
