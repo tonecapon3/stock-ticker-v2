@@ -71,7 +71,18 @@ const JWT_SECRET = process.env.REMOTE_JWT_SECRET;
 const API_KEY = process.env.REMOTE_API_KEY;
 const CLERK_SECRET_KEY = process.env.CLERK_SECRET_KEY;
 const CLERK_PUBLISHABLE_KEY = process.env.VITE_CLERK_PUBLISHABLE_KEY || process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-const ALLOWED_ORIGINS = (process.env.REMOTE_ALLOWED_ORIGINS || 'http://localhost:3000').split(',');
+// Configure CORS origins based on environment
+const getDefaultOrigins = () => {
+  const nodeEnv = process.env.NODE_ENV;
+  if (nodeEnv === 'production') {
+    return 'https://main.d7lc7dqjkvbj3.amplifyapp.com';
+  } else if (nodeEnv === 'staging') {
+    return 'https://staging.dv565hju499c6.amplifyapp.com';
+  }
+  return 'http://localhost:3000';
+};
+
+const ALLOWED_ORIGINS = (process.env.CORS_ORIGIN || process.env.REMOTE_ALLOWED_ORIGINS || getDefaultOrigins()).split(',');
 
 // Debug: Log environment variable status
 console.log('🔍 Hybrid Server Environment Variables Check:');

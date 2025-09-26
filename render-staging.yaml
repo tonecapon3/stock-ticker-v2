@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: stock-ticker-api-staging
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm run start:production
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: staging
+      - key: PORT
+        value: 10000
+      - key: CORS_ORIGIN
+        value: https://staging.dv565hju499c6.amplifyapp.com
+      - key: RENDER_EXTERNAL_URL
+        generateValue: true
+      - key: REMOTE_JWT_SECRET
+        generateValue: true
+      - key: REMOTE_ADMIN_PASSWORD_HASH
+        value: $2b$10$8K1p.X2v3l2K9.o0/wE4xeD1vNxT7mB8qL5zK3rP2nM4cV6bH9tO6
+      - key: REMOTE_CONTROLLER_PASSWORD_HASH  
+        value: $2b$10$9M2q.Y3w4m3L0.p1/xF5yfE2wOyU8nC9rM6aL4sQ3oN5dW7cI0uP7
+      - key: CLERK_SECRET_KEY
+        value: sk_test_SThTzDsbXHbUr9wjn1srdFmnMXTrkeAxCu5gOif5uW
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        value: pk_test_d29ya2FibGUtbWFydGluLTAuY2xlcmsuYWNjb3VudHMuZGV2JA
