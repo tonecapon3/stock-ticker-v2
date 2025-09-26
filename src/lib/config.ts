@@ -29,8 +29,8 @@ export const getApiBaseUrl = (): string => {
     console.log('🏠 Development mode: using local API server');
     return 'http://localhost:3001';
   } else {
-    // Production without API URL - use production default
-    const productionDefault = 'https://stock-ticker-v2.onrender.com';
+    // Production without API URL - use working staging server as default
+    const productionDefault = 'https://stock-ticker-api-staging.onrender.com';
     console.log(`🏭 Production mode: using default API server: ${productionDefault}`);
     console.log('💡 Set VITE_API_BASE_URL to override this default.');
     return productionDefault;
