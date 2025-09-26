@@ -6,10 +6,19 @@
 export const getApiBaseUrl = (): string => {
   const apiUrl = import.meta.env.VITE_API_BASE_URL;
   
+  // Debug: Log all environment variables for troubleshooting
+  console.log('🔧 Environment Debug:', {
+    VITE_API_BASE_URL: apiUrl,
+    VITE_INSTANCE_ID: import.meta.env.VITE_INSTANCE_ID,
+    MODE: import.meta.env.MODE,
+    DEV: import.meta.env.DEV,
+    PROD: import.meta.env.PROD
+  });
+  
   // If API URL is explicitly configured, use it (prioritize environment variable)
   if (apiUrl && 
       apiUrl.trim() !== '' && 
-      (apiUrl.startsWith('https://') || apiUrl.startsWith('http://'))) {
+      (apiUrl.startsWith('https://') || apiUrl.startsWith('http://')))
     
     const cleanUrl = apiUrl.replace(/\/+$/, ''); // Remove trailing slashes
     if (import.meta.env.DEV) {
@@ -31,8 +40,10 @@ export const getApiBaseUrl = (): string => {
   } else {
     // Production without API URL - use working staging server as default
     const productionDefault = 'https://stock-ticker-api-staging.onrender.com';
-    console.log(`🏭 Production mode: using default API server: ${productionDefault}`);
-    console.log('💡 Set VITE_API_BASE_URL to override this default.');
+    console.log('🚨 FALLBACK: VITE_API_BASE_URL not configured properly!');
+    console.log('🔧 API URL value:', apiUrl);
+    console.log(`🏭 Using hardcoded fallback: ${productionDefault}`);
+    console.log('💡 Set VITE_API_BASE_URL in Amplify environment to override this.');
     return productionDefault;
   }
 };
