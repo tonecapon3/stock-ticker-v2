@@ -344,7 +344,7 @@ export const envUtils = {
   isJWTEnabled: (): boolean => {
     try {
       // Use the centralized config instead of direct env var
-      const { getApiBaseUrl } = await import('../../lib/config');
+      const { getApiBaseUrl } = require('../../lib/config');
       const apiBaseUrl = getApiBaseUrl();
       return Boolean(apiBaseUrl);
     } catch (error) {
