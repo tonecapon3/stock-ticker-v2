@@ -343,8 +343,9 @@ export const envUtils = {
    */
   isJWTEnabled: (): boolean => {
     try {
-      // Check if API server is available for JWT authentication
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL;
+      // Use the centralized config instead of direct env var
+      const { getApiBaseUrl } = await import('../../lib/config');
+      const apiBaseUrl = getApiBaseUrl();
       return Boolean(apiBaseUrl);
     } catch (error) {
       console.error('Error checking JWT availability:', error);
@@ -356,7 +357,14 @@ export const envUtils = {
    * Get API base URL for JWT authentication
    */
   getApiBaseUrl: (): string => {
-    return import.meta.env.VITE_API_BASE_URL || '';
+    try {
+      // Use the centralized config that handles environment-specific routing
+      const { getApiBaseUrl } = require('../../lib/config');
+      return getApiBaseUrl();
+    } catch (error) {
+      console.error('Error getting API base URL:', error);
+      return '';
+    }
   },
 
   /**
