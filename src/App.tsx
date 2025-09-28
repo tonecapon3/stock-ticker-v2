@@ -89,12 +89,14 @@ function MainApp() {
                     >
                       Dashboard
                     </Link>
-                    <Link 
-                      to="/remote" 
+                    <a 
+                      href="/remote" 
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="text-blue-200 hover:text-white transition-colors px-3 py-1 rounded"
                     >
-                      Control Panel
-                    </Link>
+                      Remote Control Panel
+                    </a>
                   </nav>
                 </div>
                 
