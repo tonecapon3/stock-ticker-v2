@@ -48,7 +48,7 @@ export default function LandingPage() {
             X-Force Range Stock Ticker
           </h1>
           <p className="text-xl text-gray-300 mb-8 max-w-2xl mx-auto">
-            Monitor stock prices, manage your stock portfolio, and control market simulations.
+            Monitor stock prices and control market simulations.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link 
